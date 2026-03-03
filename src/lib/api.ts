@@ -304,6 +304,9 @@ export const api = {
   // Subscriptions (all)
   allSubs: () => apiFetch<CustomerSubscription[]>("/subscriptions").then((list) => Array.isArray(list) ? list.map(normalizeSubscription) : list),
   updateSubStatus: (id: string, data: any) => apiFetch<any>(`/subscriptions/${id}/status`, { method: "PUT", body: JSON.stringify(data) }),
+  createPlan: (data: any) => apiFetch<any>("/subscriptions/plans", { method: "POST", body: JSON.stringify(data) }),
+  updatePlan: (id: string, data: any) => apiFetch<any>(`/subscriptions/plans/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deletePlan: (id: string) => apiFetch<any>(`/subscriptions/plans/${id}`, { method: "DELETE" }),
   // Time Tracking
   timeEntries: (params = "") => apiFetch<any>(`/timetracking?${params}`),
   createTimeEntry: (data: any) => apiFetch<any>("/timetracking", { method: "POST", body: JSON.stringify(data) }),
