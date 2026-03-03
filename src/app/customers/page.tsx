@@ -41,6 +41,9 @@ export default function CustomersPage() {
   const [success, setSuccess] = useState("");
   const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [showQuick, setShowQuick] = useState(false);
+  const [quickForm, setQuickForm] = useState({ email: "", companyName: "" });
+  const [quickLoading, setQuickLoading] = useState(false);
 
   const load = () => {
     const params = new URLSearchParams();
@@ -86,6 +89,21 @@ export default function CustomersPage() {
     } catch (e: any) { setError(e?.message || "Fehler beim Anlegen"); }
   }
 
+  async function handleQuickCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setQuickLoading(true);
+    try {
+      await api.createCustomerQuick({ email: quickForm.email, companyName: quickForm.companyName || undefined });
+      setShowQuick(false);
+      setQuickForm({ email: "", companyName: "" });
+      setError("");
+      setSuccess("Einladungs-E-Mail wurde gesendet! Der Kunde kann seine Daten jetzt selbst vervollständigen.");
+      setTimeout(() => setSuccess(""), 6000);
+      load();
+    } catch (e: any) { setError(e?.message || "Fehler bei der Schnellerfassung"); }
+    finally { setQuickLoading(false); }
+  }
+
   async function handleDelete(id: string, name: string) {
     setMenuOpen(null);
     if (!confirm(`Kunden „${name}" wirklich löschen?`)) return;
@@ -99,6 +117,7 @@ export default function CustomersPage() {
         <h1 className="text-2xl font-bold">Kunden</h1>
         <div className="flex items-center gap-3">
           <input placeholder="Suchen..." value={search} onChange={e => setSearch(e.target.value)} className="px-3 py-1.5 border border-border rounded-lg text-sm w-52" />
+          <button onClick={() => setShowQuick(true)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">✉ Schnellerfassung</button>
           <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90">+ Neuer Kunde</button>
         </div>
       </div>
@@ -223,6 +242,32 @@ export default function CustomersPage() {
 
       {/* Close menu on outside click */}
       {menuOpen && <div className="fixed inset-0 z-[5]" onClick={() => setMenuOpen(null)} />}
+
+      {/* Schnellerfassung Modal */}
+      {showQuick && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <form onSubmit={handleQuickCreate} className="bg-surface rounded-xl border border-border p-6 w-full max-w-md shadow-lg">
+            <h2 className="text-lg font-semibold mb-1">Schnellerfassung</h2>
+            <p className="text-sm text-muted mb-4">Der Kunde erhält eine E-Mail mit einem Link und kann seine Daten selbst eintragen.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-text mb-1">E-Mail-Adresse *</label>
+                <input required type="email" value={quickForm.email} onChange={e => setQuickForm({ ...quickForm, email: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="kunde@beispiel.de" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text mb-1">Firmenname (optional)</label>
+                <input value={quickForm.companyName} onChange={e => setQuickForm({ ...quickForm, companyName: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" placeholder="Wird vom Kunden ausgefüllt wenn leer" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-5">
+              <button type="button" onClick={() => { setShowQuick(false); setQuickForm({ email: "", companyName: "" }); }} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">Abbrechen</button>
+              <button type="submit" disabled={quickLoading} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50">
+                {quickLoading ? "Sende..." : "E-Mail senden"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

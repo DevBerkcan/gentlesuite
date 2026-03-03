@@ -307,6 +307,9 @@ export const api = {
   createPlan: (data: any) => apiFetch<any>("/subscriptions/plans", { method: "POST", body: JSON.stringify(data) }),
   updatePlan: (id: string, data: any) => apiFetch<any>(`/subscriptions/plans/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deletePlan: (id: string) => apiFetch<any>(`/subscriptions/plans/${id}`, { method: "DELETE" }),
+  createCustomerQuick: (data: { email: string; companyName?: string }) => apiFetch<any>("/customers/quick", { method: "POST", body: JSON.stringify(data) }),
+  getIntake: (token: string) => fetch(`${API}/api/intake/${token}`).then(r => r.ok ? r.json() : Promise.reject()),
+  submitIntake: (token: string, data: any) => fetch(`${API}/api/intake/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }),
   // Time Tracking
   timeEntries: (params = "") => apiFetch<any>(`/timetracking?${params}`),
   createTimeEntry: (data: any) => apiFetch<any>("/timetracking", { method: "POST", body: JSON.stringify(data) }),
