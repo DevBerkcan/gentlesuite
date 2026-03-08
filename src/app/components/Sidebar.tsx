@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, UsersRound, FileText, Receipt, Wallet, Calculator, FolderKanban, RefreshCw, Clock, Settings, LogOut, PackageOpen, Mail, FileStack, BookOpen, Scale, ClipboardCheck, Contact, Package, KeyRound, TrendingUp, LifeBuoy } from "lucide-react";
+import { LayoutDashboard, Users, UsersRound, FileText, Receipt, Wallet, Calculator, FolderKanban, RefreshCw, Clock, Settings, PackageOpen, Mail, FileStack, BookOpen, Scale, ClipboardCheck, Contact, Package, KeyRound, TrendingUp, LifeBuoy, Tag, Archive, BarChart2, CalendarDays, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -17,18 +17,22 @@ const mainNav: NavItem[] = [
   { href: "/invoices", label: "Rechnungen", icon: Receipt },
   { href: "/expenses", label: "Ausgaben", icon: Wallet },
   { href: "/projects", label: "Projekte", icon: FolderKanban },
-  { href: "/subscriptions", label: "Abonnements", icon: RefreshCw },
+  { href: "/subscriptions", label: "Serienrechnungen", icon: RefreshCw },
   { href: "/time", label: "Zeiterfassung", icon: Clock },
+  { href: "/calendar", label: "Kalender", icon: CalendarDays },
+  { href: "/reports", label: "Berichte", icon: BarChart2 },
 ];
 
 const accountingNav: NavItem[] = [
   { href: "/accounting", label: "Buchungen", icon: BookOpen },
   { href: "/vat", label: "USt-Voranmeldung", icon: Calculator },
+  { href: "/steuer", label: "Steuerbereich", icon: Archive },
 ];
 
 const adminNav: NavItem[] = [
   { href: "/team", label: "Mitarbeiter", icon: UsersRound },
   { href: "/products", label: "Produkte", icon: Package },
+  { href: "/pricelists", label: "Preislisten", icon: Tag },
   { href: "/services", label: "Leistungen", icon: PackageOpen },
   { href: "/templates", label: "Vorlagen", icon: FileStack },
   { href: "/onboarding", label: "Onboarding", icon: ClipboardCheck },
@@ -40,18 +44,23 @@ const adminNav: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    const u = localStorage.getItem("user");
-    if (u) setUser(JSON.parse(u));
-  }, []);
 
   const isActive = (href: string) => pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
 
   return (
     <aside className="w-64 bg-surface border-r border-border p-6 flex flex-col shrink-0">
-      <Link href="/dashboard" className="text-xl font-bold text-primary mb-8">GentleSuite</Link>
+      <Link href="/dashboard" className="mb-8 block">
+        <div className="relative h-20 w-full overflow-hidden">
+          <Image
+            src="/logo.png"
+            alt="GentleSuite"
+            fill
+            priority
+            sizes="220px"
+            className="object-contain scale-[1.8] origin-center"
+          />
+        </div>
+      </Link>
 
       <nav className="space-y-1 flex-1">
         {mainNav.map(n => (
@@ -79,17 +88,10 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      <div className="space-y-2 pt-4 border-t border-border">
+      <div className="pt-4 border-t border-border">
         <Link href="/settings" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive("/settings") ? "bg-primary/10 text-primary" : "text-text hover:bg-background"}`}>
           <Settings className="w-4 h-4" />Einstellungen
         </Link>
-        <div className="px-3 pt-2">
-          <p className="text-sm font-medium">{user?.fullName}</p>
-          <p className="text-xs text-muted">{user?.email}</p>
-          <button onClick={() => { localStorage.clear(); window.location.href = "/login"; }} className="mt-2 text-xs text-danger hover:underline flex items-center gap-1">
-            <LogOut className="w-3 h-3" />Abmelden
-          </button>
-        </div>
       </div>
     </aside>
   );

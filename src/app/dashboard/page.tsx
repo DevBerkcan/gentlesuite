@@ -9,12 +9,16 @@ const MONTHS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", 
 export default function DashboardPage() {
   const [kpis, setKpis] = useState<any>(null);
   const [finance, setFinance] = useState<any>(null);
+  const [pendingSubCount, setPendingSubCount] = useState(0);
 
   useEffect(() => {
     const u = localStorage.getItem("user");
     if (!u) { window.location.href = "/login"; return; }
     api.kpis().then(setKpis).catch(() => {});
     api.finance().then(setFinance).catch(() => {});
+    api.allSubs().then((list: any[]) => {
+      setPendingSubCount((list || []).filter((s: any) => s.status === "PendingConfirmation").length);
+    }).catch(() => {});
   }, []);
 
   const chartData = finance?.revenueChart?.map((m: any) => ({
@@ -26,6 +30,13 @@ export default function DashboardPage() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+
+      {pendingSubCount > 0 && (
+        <Link href="/subscriptions" className="block mb-4 bg-orange-50 border border-orange-200 text-orange-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2 hover:bg-orange-100 transition-colors">
+          <span className="font-semibold">⚠ {pendingSubCount} Abonnement{pendingSubCount > 1 ? "s warten" : " wartet"} auf Bestätigung</span>
+          <span className="text-orange-500">→ Jetzt bestätigen</span>
+        </Link>
+      )}
 
       {kpis && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

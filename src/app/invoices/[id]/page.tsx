@@ -44,6 +44,7 @@ export default function InvoiceDetailPage() {
   const [success, setSuccess] = useState("");
   const [initialSnapshot, setInitialSnapshot] = useState("");
   const [reminderStop, setReminderStop] = useState(false);
+  const [xmlDownloading, setXmlDownloading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -199,6 +200,19 @@ export default function InvoiceDetailPage() {
     } catch (e: any) { setError(e?.message || "Fehler beim Stornieren"); }
   }
 
+  async function handleXmlDownload() {
+    setXmlDownloading(true);
+    try {
+      const blob = await api.invoiceXml(id);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `XRechnung_${invoice?.invoiceNumber ?? id}.xml`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch { setError("XRechnung-Export fehlgeschlagen."); }
+    finally { setXmlDownloading(false); }
+  }
+
   async function handleToggleReminderStop() {
     const next = !reminderStop;
     try {
@@ -244,6 +258,11 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex gap-2">
           <a href={api.invoicePdf(id)} target="_blank" className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background">PDF</a>
+          {invoiceStatus !== "Draft" && (
+            <button onClick={handleXmlDownload} disabled={xmlDownloading} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background disabled:opacity-50">
+              {xmlDownloading ? "…" : "XRechnung"}
+            </button>
+          )}
           <button onClick={handleToggleReminderStop} className={`px-4 py-2 border rounded-lg text-sm font-medium ${reminderStop ? "border-warning text-warning hover:bg-yellow-50" : "border-border hover:bg-background"}`}>
             {reminderStop ? "Mahnstopp aktiv" : "Mahnstopp"}
           </button>

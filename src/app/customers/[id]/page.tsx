@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Trash2 } from "lucide-react";
 
-type Tab = "overview" | "contacts" | "notes" | "onboarding" | "activity" | "pricelists" | "opportunities" | "tickets" | "crmactivities";
+type Tab = "overview" | "contacts" | "notes" | "onboarding" | "activity" | "pricelists" | "opportunities" | "tickets" | "crmactivities" | "documents";
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -49,6 +49,8 @@ export default function CustomerDetailPage() {
   const [oppForm, setOppForm] = useState({ title: "", stage: "Qualification", probability: 10, expectedRevenue: 0, closeDate: "" });
   const [ticketForm, setTicketForm] = useState({ title: "", description: "", priority: "Medium", category: "General" });
   const [actForm, setActForm] = useState({ type: "Call", subject: "", description: "", dueDate: "" });
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [docUploading, setDocUploading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -61,6 +63,7 @@ export default function CustomerDetailPage() {
     loadOpportunities();
     loadTickets();
     loadCrmActivities();
+    loadDocuments();
     api.products().then(setPlProducts).catch(() => {});
     api.teamMembers().then(setPlTeamMembers).catch(() => {});
     api.onboardingTemplates().then((list: any[]) => {
@@ -79,6 +82,7 @@ export default function CustomerDetailPage() {
   const loadOpportunities = () => api.opportunities(`customerId=${id}`).then(setOpportunities).catch(() => {});
   const loadTickets = () => api.tickets(`customerId=${id}`).then(setTickets).catch(() => {});
   const loadCrmActivities = () => api.crmActivities(`customerId=${id}`).then(setCrmActivities).catch(() => {});
+  const loadDocuments = () => api.customerDocuments(id).then(setDocuments).catch(() => {});
 
   async function handleSave() {
     try {
@@ -270,6 +274,7 @@ export default function CustomerDetailPage() {
     { key: "crmactivities", label: `Aktivitäten (${crmActivities.length})` },
     { key: "pricelists", label: `Preislisten (${priceLists.length})` },
     { key: "activity", label: "Aktivitaet" },
+    { key: "documents", label: `Dokumente (${documents.length})` },
   ];
 
   return (
@@ -866,6 +871,74 @@ export default function CustomerDetailPage() {
             ))}
             {priceLists.length === 0 && <div className="text-center py-8 text-muted text-sm">Noch keine Preislisten vorhanden.</div>}
           </div>
+        </div>
+      )}
+
+      {/* === Dokumente Tab === */}
+      {tab === "documents" && (
+        <div className="bg-surface border border-border rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">Kundendokumente</h2>
+            <label className={`px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-primary-hover transition-colors ${docUploading ? "opacity-50 pointer-events-none" : ""}`}>
+              {docUploading ? "Hochladen..." : "+ Dokument hochladen"}
+              <input
+                type="file"
+                className="hidden"
+                disabled={docUploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setDocUploading(true);
+                  try {
+                    await api.uploadCustomerDocument(id, file);
+                    loadDocuments();
+                  } catch { setError("Hochladen fehlgeschlagen"); }
+                  finally { setDocUploading(false); e.target.value = ""; }
+                }}
+              />
+            </label>
+          </div>
+          {documents.length === 0 ? (
+            <div className="text-center py-10 text-muted text-sm">Noch keine Dokumente hochgeladen.</div>
+          ) : (
+            <div className="space-y-2">
+              {documents.map((doc: any) => (
+                <div key={doc.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-background transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center text-xs font-bold shrink-0">
+                      {doc.fileName.split(".").pop()?.toUpperCase().slice(0, 4) ?? "DOC"}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{doc.fileName}</p>
+                      <p className="text-xs text-muted">{(doc.fileSizeBytes / 1024).toFixed(1)} KB · {new Date(doc.createdAt).toLocaleDateString("de-DE")}{doc.notes ? ` · ${doc.notes}` : ""}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <a
+                      href={`${api.customerDocumentDownloadUrl(id, doc.id)}?token=${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`}
+                      download={doc.fileName}
+                      className="px-3 py-1.5 border border-border rounded text-xs hover:bg-background transition-colors"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+                        const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+                        const res = await fetch(`${API}/api/customers/${id}/documents/${doc.id}/download`, {
+                          headers: token ? { Authorization: `Bearer ${token}` } : {}
+                        });
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a"); a.href = url; a.download = doc.fileName; a.click(); URL.revokeObjectURL(url);
+                      }}
+                    >↓ Download</a>
+                    <button
+                      onClick={async () => { if (!confirm("Dokument löschen?")) return; await api.deleteCustomerDocument(id, doc.id); loadDocuments(); }}
+                      className="px-3 py-1.5 border border-border rounded text-xs text-danger hover:bg-red-50 transition-colors"
+                    >Löschen</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -238,6 +238,12 @@ export const api = {
   setInvoiceReminderStop: (id: string, reminderStop: boolean) => apiFetch<any>(`/invoices/${id}/reminder-stop`, { method: "PUT", body: JSON.stringify({ reminderStop }) }),
   sendInvoice: (id: string) => apiFetch<any>(`/invoices/${id}/send`, { method: "POST" }),
   invoicePdf: (id: string) => `${API}/api/invoices/${id}/pdf`,
+  invoiceXml: async (id: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await fetch(`${API}/api/invoices/${id}/xrechnung`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new Error(await res.text());
+    return res.blob();
+  },
   // Expenses
   expenses: (params = "") => apiFetch<PagedResult<ExpenseListItem>>(`/expenses?${params}`).then((d) => normalizePaged(d, normalizeExpense)),
   expense: (id: string) => apiFetch<ExpenseDetail>(`/expenses/${id}`).then(normalizeExpense),
@@ -304,9 +310,21 @@ export const api = {
   // Subscriptions (all)
   allSubs: () => apiFetch<CustomerSubscription[]>("/subscriptions").then((list) => Array.isArray(list) ? list.map(normalizeSubscription) : list),
   updateSubStatus: (id: string, data: any) => apiFetch<any>(`/subscriptions/${id}/status`, { method: "PUT", body: JSON.stringify(data) }),
+  confirmSub: (id: string) => apiFetch<any>(`/subscriptions/${id}/confirm`, { method: "POST" }),
+  subscriptionInvoices: (id: string) => apiFetch<any>(`/subscriptions/${id}/invoices`),
   createPlan: (data: any) => apiFetch<any>("/subscriptions/plans", { method: "POST", body: JSON.stringify(data) }),
   updatePlan: (id: string, data: any) => apiFetch<any>(`/subscriptions/plans/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deletePlan: (id: string) => apiFetch<any>(`/subscriptions/plans/${id}`, { method: "DELETE" }),
+  triggerSubscriptionInvoices: () => apiFetch<void>("/system/trigger-subscription-invoices", { method: "POST" }),
+  triggerBankSync: () => apiFetch<void>("/system/trigger-bank-sync", { method: "POST" }),
+  // Integrations (PayPal + GoCardless / Fyrst)
+  integrationSettings: () => apiFetch<any>("/integrations"),
+  updatePayPal: (data: any) => apiFetch<void>("/integrations/paypal", { method: "PUT", body: JSON.stringify(data) }),
+  disconnectPayPal: () => apiFetch<void>("/integrations/paypal", { method: "DELETE" }),
+  setupBank: (data: any) => apiFetch<any>("/integrations/bank/setup", { method: "POST", body: JSON.stringify(data) }),
+  confirmBank: (data: any) => apiFetch<void>("/integrations/bank/confirm", { method: "POST", body: JSON.stringify(data) }),
+  disconnectBank: () => apiFetch<void>("/integrations/bank", { method: "DELETE" }),
+  syncIntegrations: () => apiFetch<void>("/integrations/sync", { method: "POST" }),
   createCustomerQuick: (data: { email: string; companyName?: string }) => apiFetch<any>("/customers/quick", { method: "POST", body: JSON.stringify(data) }),
   getIntake: (token: string) => fetch(`${API}/api/intake/${token}`).then(r => r.ok ? r.json() : Promise.reject()),
   submitIntake: (token: string, data: any) => fetch(`${API}/api/intake/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }),
@@ -320,6 +338,22 @@ export const api = {
   vatReport: (year: number, month: number) => apiFetch<any>(`/vat/report?year=${year}&month=${month}`),
   vatSubmit: (year: number, month: number) => apiFetch<any>(`/vat/submit?year=${year}&month=${month}`, { method: "POST" }),
   vatDatevUrl: (year: number, month: number) => `${API}/api/vat/datev?year=${year}&month=${month}`,
+  vatElsterXml: async (year: number, month: number) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await fetch(`${API}/api/vat/elster-xml?year=${year}&month=${month}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new Error(await res.text());
+    return res.blob();
+  },
+  // Export / Steuerbereich
+  exportYearStats: (year: number) => apiFetch<any>(`/export/year/stats?year=${year}`),
+  exportYearZip: async (year: number, invoices: boolean, expenses: boolean) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await fetch(`${API}/api/export/year?year=${year}&includeInvoices=${invoices}&includeExpenses=${expenses}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.blob();
+  },
   // Users
   users: () => apiFetch<any>("/users"),
   createUser: (data: any) => apiFetch<any>("/users", { method: "POST", body: JSON.stringify(data) }),
@@ -394,4 +428,30 @@ export const api = {
   updateCrmActivity: (id: string, data: any) => apiFetch<any>(`/crmactivities/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   completeCrmActivity: (id: string, data?: any) => apiFetch<any>(`/crmactivities/${id}/complete`, { method: "PUT", body: JSON.stringify(data ?? {}) }),
   deleteCrmActivity: (id: string) => apiFetch<any>(`/crmactivities/${id}`, { method: "DELETE" }),
+  // Berichte
+  reportRevenueByCustomer: (year?: number) => apiFetch<any>(`/reports/revenue-by-customer${year ? `?year=${year}` : ""}`),
+  reportExpenseByCategory: (year?: number, month?: number) => apiFetch<any>(`/reports/expense-by-category?${year ? `year=${year}` : ""}${month ? `&month=${month}` : ""}`),
+  reportMonthlyFinance: (year?: number) => apiFetch<any>(`/reports/monthly-finance${year ? `?year=${year}` : ""}`),
+  // Globale Suche
+  globalSearch: (q: string) => apiFetch<any>(`/search?q=${encodeURIComponent(q)}&limit=5`),
+  // Kalender
+  calendarEvents: (from?: string, to?: string) => apiFetch<any>(`/calendar${from ? `?from=${from}&to=${to}` : ""}`),
+  // Kundendokumente
+  customerDocuments: (customerId: string) => apiFetch<any>(`/customers/${customerId}/documents`),
+  deleteCustomerDocument: (customerId: string, docId: string) => apiFetch<void>(`/customers/${customerId}/documents/${docId}`, { method: "DELETE" }),
+  customerDocumentDownloadUrl: (customerId: string, docId: string) => `${typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000") : ""}/api/customers/${customerId}/documents/${docId}/download`,
+  uploadCustomerDocument: async (customerId: string, file: File, notes?: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+    const fd = new FormData();
+    fd.append("file", file);
+    if (notes) fd.append("notes", notes);
+    const res = await fetch(`${API}/api/customers/${customerId}/documents`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
 };

@@ -13,9 +13,24 @@ export default function InvoicesPage() {
   const [lines, setLines] = useState([emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  const [xmlDownloading, setXmlDownloading] = useState<string | null>(null);
 
   const load = (status = "") => api.invoices(status ? `status=${status}` : "").then(setData).catch(() => setError("Rechnungen konnten nicht geladen werden"));
   useEffect(() => { load(); }, []);
+
+  const handleXmlDownload = async (id: string, invoiceNumber: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setXmlDownloading(id);
+    try {
+      const blob = await api.invoiceXml(id);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `XRechnung_${invoiceNumber}.xml`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch { setError("XRechnung-Export fehlgeschlagen."); }
+    finally { setXmlDownloading(null); }
+  };
 
   const openModal = async () => {
     try { const c = await api.customers("pageSize=200"); setCustomers(c.items || []); } catch {}
@@ -66,7 +81,7 @@ export default function InvoicesPage() {
 
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
         <table className="w-full">
-          <thead><tr className="border-b border-border bg-background"><th className="px-4 py-3 text-left text-xs text-muted">Nr.</th><th className="px-4 py-3 text-left text-xs text-muted">Kunde</th><th className="px-4 py-3 text-left text-xs text-muted">Status</th><th className="px-4 py-3 text-right text-xs text-muted">Brutto</th><th className="px-4 py-3 text-left text-xs text-muted">Faellig</th><th className="px-4 py-3 text-left text-xs text-muted">PDF</th></tr></thead>
+          <thead><tr className="border-b border-border bg-background"><th className="px-4 py-3 text-left text-xs text-muted">Nr.</th><th className="px-4 py-3 text-left text-xs text-muted">Kunde</th><th className="px-4 py-3 text-left text-xs text-muted">Status</th><th className="px-4 py-3 text-right text-xs text-muted">Brutto</th><th className="px-4 py-3 text-left text-xs text-muted">Faellig</th><th className="px-4 py-3 text-left text-xs text-muted">Dokumente</th></tr></thead>
           <tbody>{data?.items?.map((i: any) => (
             <tr key={i.id} className="border-b border-border hover:bg-background cursor-pointer" onClick={() => window.location.href = `/invoices/${i.id}`}>
               <td className="px-4 py-3 font-medium">{i.invoiceNumber}</td>
@@ -74,7 +89,14 @@ export default function InvoicesPage() {
               <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full ${i.status === "Paid" ? "bg-green-50 text-success" : i.status === "Overdue" ? "bg-red-50 text-danger" : "bg-yellow-50 text-warning"}`}>{i.status}</span></td>
               <td className="px-4 py-3 text-right font-medium">{i.grossTotal?.toFixed(2)} EUR</td>
               <td className="px-4 py-3 text-sm text-muted">{new Date(i.dueDate).toLocaleDateString("de")}</td>
-              <td className="px-4 py-3"><a href={api.invoicePdf(i.id)} target="_blank" className="text-primary text-sm hover:underline" onClick={e => e.stopPropagation()}>PDF</a></td>
+              <td className="px-4 py-3 flex items-center gap-3">
+                <a href={api.invoicePdf(i.id)} target="_blank" className="text-primary text-sm hover:underline" onClick={e => e.stopPropagation()}>PDF</a>
+                {i.status !== "Draft" && (
+                  <button onClick={e => handleXmlDownload(i.id, i.invoiceNumber, e)} disabled={xmlDownloading === i.id} className="text-sm text-muted hover:text-text disabled:opacity-50">
+                    {xmlDownloading === i.id ? "…" : "XML"}
+                  </button>
+                )}
+              </td>
             </tr>
           ))}</tbody>
         </table>

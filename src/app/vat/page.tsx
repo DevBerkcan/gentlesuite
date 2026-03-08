@@ -18,6 +18,7 @@ export default function VatPage() {
   const [datevInvoices, setDatevInvoices] = useState(true);
   const [datevExpenses, setDatevExpenses] = useState(true);
   const [datevJournal, setDatevJournal] = useState(true);
+  const [elsterDownloading, setElsterDownloading] = useState(false);
 
   async function loadReport() {
     setLoading(true);
@@ -59,7 +60,25 @@ export default function VatPage() {
       .catch(() => setError("DATEV-Export fehlgeschlagen"));
   }
 
+  async function handleElsterDownload() {
+    setElsterDownloading(true);
+    try {
+      const blob = await api.vatElsterXml(year, month);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `ELSTER_UStVA_${year}_${String(month).padStart(2, "0")}.xml`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch { setError("ELSTER-XML-Export fehlgeschlagen"); }
+    finally { setElsterDownloading(false); }
+  }
+
+  function copyToClipboard(val: number) {
+    navigator.clipboard.writeText(val.toFixed(2).replace(".", ","));
+  }
+
   const fmt = (n: number) => n.toFixed(2).replace(".", ",") + " EUR";
+  const fmtKz = (n: number) => n.toFixed(2).replace(".", ",");
 
   return (
     <div className="p-8 max-w-6xl">
@@ -112,6 +131,47 @@ export default function VatPage() {
               <p className={`text-lg font-bold ${report.payableTax >= 0 ? "text-danger" : "text-success"}`}>{fmt(report.payableTax)}</p>
             </div>
           </div>
+
+          {/* ELSTER Kennzahlen */}
+          <section className="bg-surface border border-border rounded-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-semibold">ELSTER UStVA – Kennzahlen</h2>
+                <p className="text-xs text-muted mt-0.5">{MONTHS[month - 1]} {year} · Werte direkt ins ELSTER Online Portal übertragen</p>
+              </div>
+              <button onClick={handleElsterDownload} disabled={elsterDownloading} className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background disabled:opacity-50">
+                {elsterDownloading ? "Wird erstellt…" : "ELSTER-XML herunterladen"}
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+              {[
+                { kz: "81", label: "Lieferungen/Leistungen 19% – Nettobetrag", value: report.netBase19 ?? 0 },
+                { kz: "83", label: "Umsatzsteuer 19%", value: report.outputVat19 },
+                { kz: "86", label: "Lieferungen/Leistungen 7% – Nettobetrag", value: report.netBase7 ?? 0 },
+                { kz: "85", label: "Umsatzsteuer 7%", value: report.outputVat7 },
+                { kz: "66", label: "Abziehbare Vorsteuerbeträge", value: report.inputVat },
+                report.payableTax >= 0
+                  ? { kz: "69", label: "Verbleibende USt-Zahllast", value: report.payableTax }
+                  : { kz: "67", label: "Erstattungsbetrag", value: -report.payableTax },
+              ].map(({ kz, label, value }) => (
+                <div key={kz} className="flex items-center justify-between bg-background rounded-lg px-4 py-2.5 gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded shrink-0">KZ {kz}</span>
+                    <span className="text-muted truncate">{label}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono font-medium">{fmtKz(value)}</span>
+                    <button onClick={() => copyToClipboard(value)} title="Kopieren" className="text-muted hover:text-text text-xs px-1.5 py-0.5 border border-border rounded hover:bg-surface">
+                      📋
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted mt-3">
+              → <a href="https://www.elster.de" target="_blank" rel="noopener noreferrer" className="underline hover:text-text">ELSTER Online Portal öffnen</a>
+            </p>
+          </section>
 
           {/* Invoice lines */}
           {report.invoiceLines?.length > 0 && (

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 
 export default function SettingsPage() {
@@ -10,10 +10,23 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Integration state
+  const [integration, setIntegration] = useState<any>(null);
+  const [paypalForm, setPaypalForm] = useState({ clientId: "", clientSecret: "" });
+  const [bankForm, setBankForm] = useState({ secretId: "", secretKey: "", iban: "" });
+  const [bankAuthUrl, setBankAuthUrl] = useState<string | null>(null);
+  const [bankReqId, setBankReqId] = useState<string | null>(null);
+  const [integLoading, setIntegLoading] = useState(false);
+
+  const loadIntegration = useCallback(() => {
+    api.integrationSettings().then(setIntegration).catch(() => {});
+  }, []);
+
   useEffect(() => {
     api.settings().then(setForm).catch(() => setError("Einstellungen konnten nicht geladen werden"));
     api.reminderSettings().then(setReminders).catch(() => setError("Mahnlauf-Einstellungen konnten nicht geladen werden"));
-  }, []);
+    loadIntegration();
+  }, [loadIntegration]);
 
   useEffect(() => {
     api.numberRanges(numberYear).then(setNumberRanges).catch(() => setError("Nummernkreise konnten nicht geladen werden"));
@@ -39,6 +52,69 @@ export default function SettingsPage() {
     } catch (e: any) {
       setError(e?.message || "Fehler beim Speichern der Mahnlauf-Einstellungen");
     }
+  }
+
+  async function handlePayPalConnect() {
+    if (!paypalForm.clientId || !paypalForm.clientSecret) { setError("Client ID und Secret sind erforderlich."); return; }
+    setIntegLoading(true);
+    try {
+      await api.updatePayPal({ clientId: paypalForm.clientId, clientSecret: paypalForm.clientSecret });
+      setSuccess("PayPal verbunden — erster Sync startet automatisch");
+      setTimeout(() => setSuccess(""), 5000);
+      setPaypalForm({ clientId: "", clientSecret: "" });
+      loadIntegration();
+    } catch (e: any) { setError(e?.message || "PayPal-Verbindung fehlgeschlagen"); }
+    finally { setIntegLoading(false); }
+  }
+
+  async function handlePayPalDisconnect() {
+    if (!confirm("PayPal-Verbindung wirklich trennen?")) return;
+    await api.disconnectPayPal().catch(() => {});
+    loadIntegration();
+  }
+
+  async function handleBankSetup() {
+    if (!bankForm.secretId || !bankForm.secretKey || !bankForm.iban) { setError("Alle Felder sind erforderlich."); return; }
+    setIntegLoading(true);
+    try {
+      const res = await api.setupBank({ goCardlessSecretId: bankForm.secretId, goCardlessSecretKey: bankForm.secretKey, iban: bankForm.iban });
+      setBankAuthUrl(res.authUrl);
+      setBankReqId(integration?.bankRequisitionId || "");
+      setSuccess("Autorisierungs-Link erstellt — bitte öffnen und Fyrst autorisieren");
+      setTimeout(() => setSuccess(""), 8000);
+      loadIntegration();
+    } catch (e: any) { setError(e?.message || "Bank-Setup fehlgeschlagen"); }
+    finally { setIntegLoading(false); }
+  }
+
+  async function handleBankConfirm() {
+    const reqId = bankReqId || integration?.bankRequisitionId;
+    if (!reqId) { setError("Keine Requisition-ID gefunden. Bitte erneut verbinden."); return; }
+    setIntegLoading(true);
+    try {
+      await api.confirmBank({ requisitionId: reqId });
+      setBankAuthUrl(null);
+      setSuccess("Geschäftskonto erfolgreich verbunden!");
+      setTimeout(() => setSuccess(""), 5000);
+      loadIntegration();
+    } catch (e: any) { setError(e?.message || "Bestätigung fehlgeschlagen — bitte erst Fyrst autorisieren"); }
+    finally { setIntegLoading(false); }
+  }
+
+  async function handleBankDisconnect() {
+    if (!confirm("Geschäftskonto-Verbindung wirklich trennen?")) return;
+    await api.disconnectBank().catch(() => {});
+    setBankAuthUrl(null);
+    loadIntegration();
+  }
+
+  async function handleManualSync() {
+    try {
+      await api.syncIntegrations();
+      setSuccess("Synchronisation gestartet — Daten werden geladen");
+      setTimeout(() => setSuccess(""), 5000);
+      setTimeout(loadIntegration, 3000);
+    } catch { setError("Sync fehlgeschlagen"); }
   }
 
   async function handleSaveNumberRange(range: any) {
@@ -284,6 +360,126 @@ export default function SettingsPage() {
             </div>
           ))}
           {numberRanges.length === 0 && <div className="text-sm text-muted">Keine Nummernkreise gefunden.</div>}
+        </div>
+      </section>
+
+      {/* Integrationen */}
+      <section className="bg-surface rounded-xl border border-border p-6">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="font-semibold">Integrationen</h2>
+            <p className="text-xs text-muted mt-0.5">Konten verbinden — Sync alle 30 Minuten automatisch</p>
+          </div>
+          {(integration?.payPalEnabled || integration?.bankEnabled) && (
+            <button onClick={handleManualSync} className="px-3 py-1.5 border border-border rounded-lg text-xs font-medium hover:bg-background transition-colors">
+              Jetzt synchronisieren
+            </button>
+          )}
+        </div>
+
+        {/* PayPal */}
+        <div className="border border-border rounded-xl p-5 mb-4">
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <p className="font-medium text-sm">PayPal Business</p>
+              <p className="text-xs text-muted">Transaktionen automatisch importieren via REST API</p>
+            </div>
+            {integration?.payPalEnabled
+              ? <span className="text-xs px-2 py-1 bg-green-50 text-success rounded-full">● Verbunden</span>
+              : <span className="text-xs px-2 py-1 bg-gray-100 text-muted rounded-full">○ Nicht verbunden</span>}
+          </div>
+          {integration?.payPalEnabled ? (
+            <div className="flex items-center gap-4">
+              <div className="text-xs text-muted">
+                Client ID: <span className="font-mono">{integration.payPalClientId}</span>
+                {integration.payPalLastSync && <span className="ml-3">Letzter Sync: {new Date(integration.payPalLastSync).toLocaleString("de")}</span>}
+              </div>
+              <button onClick={handlePayPalDisconnect} className="text-xs text-danger hover:underline ml-auto">Trennen</button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-muted mb-1">Client ID</label>
+                <input value={paypalForm.clientId} onChange={e => setPaypalForm({ ...paypalForm, clientId: e.target.value })} placeholder="AaBbCc..." className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+              </div>
+              <div>
+                <label className="block text-xs text-muted mb-1">Client Secret</label>
+                <input type="password" value={paypalForm.clientSecret} onChange={e => setPaypalForm({ ...paypalForm, clientSecret: e.target.value })} placeholder="••••••••••••" className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-muted mb-2">Keys unter <span className="font-mono">developer.paypal.com</span> → Apps &amp; Credentials → Live → App erstellen</p>
+                <button onClick={handlePayPalConnect} disabled={integLoading} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50">
+                  {integLoading ? "Verbinden..." : "PayPal verbinden"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Fyrst / GoCardless */}
+        <div className="border border-border rounded-xl p-5">
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <p className="font-medium text-sm">Fyrst Geschäftskonto</p>
+              <p className="text-xs text-muted">Kontoauszüge via GoCardless / PSD2 Open Banking</p>
+            </div>
+            {integration?.bankEnabled
+              ? <span className="text-xs px-2 py-1 bg-green-50 text-success rounded-full">● Verbunden</span>
+              : <span className="text-xs px-2 py-1 bg-gray-100 text-muted rounded-full">○ Nicht verbunden</span>}
+          </div>
+          {integration?.bankEnabled ? (
+            <div className="flex items-center gap-4">
+              <div className="text-xs text-muted">
+                Konto-ID: <span className="font-mono">{integration.bankAccountId?.slice(0, 8)}...</span>
+                {integration.bankLastSync && <span className="ml-3">Letzter Sync: {new Date(integration.bankLastSync).toLocaleString("de")}</span>}
+              </div>
+              <button onClick={handleBankDisconnect} className="text-xs text-danger hover:underline ml-auto">Trennen</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {!bankAuthUrl ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-muted mb-1">GoCardless Secret ID</label>
+                      <input value={bankForm.secretId} onChange={e => setBankForm({ ...bankForm, secretId: e.target.value })} placeholder="xxx-xxx-xxx" className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted mb-1">GoCardless Secret Key</label>
+                      <input type="password" value={bankForm.secretKey} onChange={e => setBankForm({ ...bankForm, secretKey: e.target.value })} placeholder="••••••••" className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-muted mb-1">Deine Fyrst IBAN</label>
+                      <input value={bankForm.iban} onChange={e => setBankForm({ ...bankForm, iban: e.target.value })} placeholder="DE89 3704 0044 0532 0130 00" className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted">Keys unter <span className="font-mono">bankaccountdata.gocardless.com</span> → User Secrets (kostenlos)</p>
+                  <button onClick={handleBankSetup} disabled={integLoading} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50">
+                    {integLoading ? "Wird eingerichtet..." : "Verbindung herstellen"}
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-background border border-border rounded-lg p-4">
+                    <p className="text-sm font-medium mb-1">Schritt 2: Fyrst autorisieren</p>
+                    <p className="text-xs text-muted mb-3">Öffne den Link und melde dich in deinem Fyrst-Konto an, um GentleSuite den Zugang zu erlauben.</p>
+                    <a href={bankAuthUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors">
+                      Fyrst-Autorisierung öffnen ↗
+                    </a>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted mb-2">Nach der Autorisierung im Browser: Klicke "Verbindung bestätigen"</p>
+                    <button onClick={handleBankConfirm} disabled={integLoading} className="px-4 py-2 bg-success text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
+                      {integLoading ? "Bestätigen..." : "✓ Verbindung bestätigen"}
+                    </button>
+                    <button onClick={() => setBankAuthUrl(null)} className="ml-3 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">
+                      Zurück
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
     </div>
