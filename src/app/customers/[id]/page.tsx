@@ -33,12 +33,12 @@ export default function CustomerDetailPage() {
   const [success, setSuccess] = useState("");
   const [reminderStop, setReminderStop] = useState(false);
   const [priceLists, setPriceLists] = useState<any[]>([]);
-  const [plProducts, setPlProducts] = useState<any[]>([]);
-  const [plTeamMembers, setPlTeamMembers] = useState<any[]>([]);
+  const [plTemplates, setPlTemplates] = useState<any[]>([]);
   const [selectedPriceList, setSelectedPriceList] = useState<any | null>(null);
   const [plForm, setPlForm] = useState({ name: "", description: "" });
   const [showPlForm, setShowPlForm] = useState(false);
-  const [plItemForm, setPlItemForm] = useState({ productId: "", teamMemberId: "", customPrice: "", note: "", sortOrder: 0 });
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+  const [plItemForm, setPlItemForm] = useState({ title: "", description: "", unit: "pauschal", unitPrice: "", sortOrder: 0 });
   const [showPlItemForm, setShowPlItemForm] = useState(false);
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
@@ -64,8 +64,7 @@ export default function CustomerDetailPage() {
     loadTickets();
     loadCrmActivities();
     loadDocuments();
-    api.products().then(setPlProducts).catch(() => {});
-    api.teamMembers().then(setPlTeamMembers).catch(() => {});
+    api.priceListTemplates().then(setPlTemplates).catch(() => {});
     api.onboardingTemplates().then((list: any[]) => {
       setOnbTemplates(list || []);
       const def = (list || []).find((t: any) => t.isDefault);
@@ -775,7 +774,24 @@ export default function CustomerDetailPage() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="font-semibold">Preislisten</h2>
-            <button onClick={() => { setPlForm({ name: "", description: "" }); setShowPlForm(true); }} className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm">+ Neue Preisliste</button>
+            <div className="flex gap-2 relative">
+              <div className="relative">
+                <button onClick={() => setShowTemplateDropdown(v => !v)} className="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-background">Aus Vorlage erstellen ▾</button>
+                {showTemplateDropdown && (
+                  <div className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-lg z-10 min-w-[200px]">
+                    {plTemplates.length === 0 && <div className="px-4 py-3 text-sm text-muted">Keine Vorlagen vorhanden</div>}
+                    {plTemplates.map((tpl: any) => (
+                      <button key={tpl.id} onClick={async () => { try { await api.clonePriceList({ templateId: tpl.id, customerId: id }); setShowTemplateDropdown(false); loadPriceLists(); } catch (ex: any) { setError(ex.message); } }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background border-b border-border last:border-0">
+                        <div className="font-medium">{tpl.name}</div>
+                        {tpl.description && <div className="text-xs text-muted">{tpl.description}</div>}
+                        <div className="text-xs text-muted">{(tpl.items || []).length} Positionen</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => { setPlForm({ name: "", description: "" }); setShowPlForm(true); }} className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm">+ Neue Preisliste</button>
+            </div>
           </div>
 
           {showPlForm && (
@@ -806,6 +822,11 @@ export default function CustomerDetailPage() {
                     {pl.description && <span className="text-xs text-muted">{pl.description}</span>}
                     <span className={`text-xs px-2 py-0.5 rounded-full ${pl.isActive ? "bg-green-50 text-success" : "bg-gray-100 text-muted"}`}>{pl.isActive ? "Aktiv" : "Inaktiv"}</span>
                     <span className="text-xs text-muted">{(pl.items || []).length} Positionen</span>
+                    {pl.items && pl.items.length > 0 && (
+                      <span className="text-xs font-medium text-muted">
+                        {pl.items.reduce((sum: number, i: any) => sum + Number(i.unitPrice), 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" })} gesamt
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <button onClick={e => { e.stopPropagation(); if (confirm("Preisliste löschen?")) api.deletePriceList(pl.id).then(loadPriceLists).catch((ex: any) => setError(ex.message)); }} className="text-xs text-danger hover:underline">Löschen</button>
@@ -816,16 +837,27 @@ export default function CustomerDetailPage() {
                 {selectedPriceList?.id === pl.id && (
                   <div className="border-t border-border p-4">
                     <table className="w-full text-sm mb-4">
-                      <thead><tr className="text-xs text-muted border-b border-border"><th className="pb-2 text-left">Produkt</th><th className="pb-2 text-left">Einheit</th><th className="pb-2 text-left">Mitarbeiter</th><th className="pb-2 text-right">Preis</th><th className="pb-2 text-left px-2">Notiz</th><th className="pb-2"></th></tr></thead>
+                      <thead>
+                        <tr className="text-xs text-muted border-b border-border">
+                          <th className="pb-2 text-left w-6">#</th>
+                          <th className="pb-2 text-left">Bezeichnung</th>
+                          <th className="pb-2 text-left">Beschreibung</th>
+                          <th className="pb-2 text-left">Einheit</th>
+                          <th className="pb-2 text-right">Preis</th>
+                          <th className="pb-2"></th>
+                        </tr>
+                      </thead>
                       <tbody>
-                        {(pl.items || []).sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((item: any) => (
+                        {(pl.items || []).sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((item: any, idx: number) => (
                           <tr key={item.id} className="border-b border-border">
-                            <td className="py-2">{item.productName}</td>
+                            <td className="py-2 text-muted">{idx + 1}</td>
+                            <td className="py-2 font-medium">{item.title}</td>
+                            <td className="py-2 text-muted text-xs">{item.description || "–"}</td>
                             <td className="py-2 text-muted">{item.unit}</td>
-                            <td className="py-2 text-muted">{item.teamMemberName || "–"}</td>
-                            <td className="py-2 text-right font-medium">{Number(item.customPrice).toFixed(2)} €</td>
-                            <td className="py-2 px-2 text-muted">{item.note || "–"}</td>
-                            <td className="py-2 text-right"><button onClick={() => api.deletePriceListItem(pl.id, item.id).then(() => { loadPriceLists(); setSelectedPriceList((prev: any) => ({ ...prev, items: prev.items.filter((x: any) => x.id !== item.id) })); }).catch((ex: any) => setError(ex.message))} className="text-xs text-danger hover:underline">×</button></td>
+                            <td className="py-2 text-right font-medium">{Number(item.unitPrice).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}</td>
+                            <td className="py-2 text-right">
+                              <button onClick={() => api.deletePriceListItem(pl.id, item.id).then(() => { loadPriceLists(); setSelectedPriceList((prev: any) => ({ ...prev, items: prev.items.filter((x: any) => x.id !== item.id) })); }).catch((ex: any) => setError(ex.message))} className="text-xs text-danger hover:underline">×</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -834,42 +866,42 @@ export default function CustomerDetailPage() {
                     {showPlItemForm ? (
                       <div className="bg-background rounded-lg p-3 border border-border">
                         <div className="grid grid-cols-2 gap-2 mb-2">
-                          <div>
-                            <label className="block text-xs text-muted mb-1">Produkt *</label>
-                            <select value={plItemForm.productId} onChange={e => { const p = plProducts.find((x: any) => x.id === e.target.value); setPlItemForm(f => ({ ...f, productId: e.target.value, customPrice: p ? String(p.defaultPrice) : f.customPrice })); }} className="w-full px-2 py-1.5 border border-border rounded text-sm">
-                              <option value="">Produkt wählen...</option>
-                              {plProducts.map((p: any) => <option key={p.id} value={p.id}>{p.name} ({p.unit})</option>)}
-                            </select>
+                          <div className="col-span-2">
+                            <label className="block text-xs text-muted mb-1">Bezeichnung *</label>
+                            <input value={plItemForm.title} onChange={e => setPlItemForm(f => ({ ...f, title: e.target.value }))} placeholder="z.B. Webseite Landingpage" className="w-full px-2 py-1.5 border border-border rounded text-sm" />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="block text-xs text-muted mb-1">Beschreibung</label>
+                            <input value={plItemForm.description} onChange={e => setPlItemForm(f => ({ ...f, description: e.target.value }))} placeholder="z.B. Responsive, CMS" className="w-full px-2 py-1.5 border border-border rounded text-sm" />
                           </div>
                           <div>
-                            <label className="block text-xs text-muted mb-1">Mitarbeiter</label>
-                            <select value={plItemForm.teamMemberId} onChange={e => setPlItemForm(f => ({ ...f, teamMemberId: e.target.value }))} className="w-full px-2 py-1.5 border border-border rounded text-sm">
-                              <option value="">Kein Mitarbeiter</option>
-                              {plTeamMembers.map((m: any) => <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>)}
+                            <label className="block text-xs text-muted mb-1">Einheit</label>
+                            <select value={plItemForm.unit} onChange={e => setPlItemForm(f => ({ ...f, unit: e.target.value }))} className="w-full px-2 py-1.5 border border-border rounded text-sm">
+                              <option value="pauschal">pauschal</option>
+                              <option value="h">h (Stunde)</option>
+                              <option value="Stk">Stk (Stück)</option>
+                              <option value="Monat">Monat</option>
+                              <option value="jährlich">jährlich</option>
                             </select>
                           </div>
                           <div>
                             <label className="block text-xs text-muted mb-1">Preis (€)</label>
-                            <input type="number" step="0.01" value={plItemForm.customPrice} onChange={e => setPlItemForm(f => ({ ...f, customPrice: e.target.value }))} className="w-full px-2 py-1.5 border border-border rounded text-sm" />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-muted mb-1">Notiz</label>
-                            <input value={plItemForm.note} onChange={e => setPlItemForm(f => ({ ...f, note: e.target.value }))} className="w-full px-2 py-1.5 border border-border rounded text-sm" />
+                            <input type="number" step="0.01" min="0" value={plItemForm.unitPrice} onChange={e => setPlItemForm(f => ({ ...f, unitPrice: e.target.value }))} className="w-full px-2 py-1.5 border border-border rounded text-sm" />
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <button onClick={() => setShowPlItemForm(false)} className="px-3 py-1.5 border border-border rounded text-xs">Abbrechen</button>
-                          <button onClick={async () => { try { await api.addPriceListItem(pl.id, { productId: plItemForm.productId, teamMemberId: plItemForm.teamMemberId || null, customPrice: parseFloat(plItemForm.customPrice) || 0, note: plItemForm.note || null, sortOrder: (pl.items || []).length }); setShowPlItemForm(false); setPlItemForm({ productId: "", teamMemberId: "", customPrice: "", note: "", sortOrder: 0 }); loadPriceLists().then(() => api.priceList(pl.id).then(setSelectedPriceList)); } catch (ex: any) { setError(ex.message); } }} disabled={!plItemForm.productId} className="px-3 py-1.5 bg-primary text-white rounded text-xs disabled:opacity-50">Hinzufügen</button>
+                          <button onClick={() => { setShowPlItemForm(false); setPlItemForm({ title: "", description: "", unit: "pauschal", unitPrice: "", sortOrder: 0 }); }} className="px-3 py-1.5 border border-border rounded text-xs">Abbrechen</button>
+                          <button onClick={async () => { try { await api.addPriceListItem(pl.id, { title: plItemForm.title, description: plItemForm.description || null, unit: plItemForm.unit, unitPrice: parseFloat(plItemForm.unitPrice) || 0, sortOrder: (pl.items || []).length }); setShowPlItemForm(false); setPlItemForm({ title: "", description: "", unit: "pauschal", unitPrice: "", sortOrder: 0 }); loadPriceLists(); setSelectedPriceList(await api.priceList(pl.id)); } catch (ex: any) { setError(ex.message); } }} disabled={!plItemForm.title} className="px-3 py-1.5 bg-primary text-white rounded text-xs disabled:opacity-50">Hinzufügen</button>
                         </div>
                       </div>
                     ) : (
-                      <button onClick={() => { setPlItemForm({ productId: "", teamMemberId: "", customPrice: "", note: "", sortOrder: 0 }); setShowPlItemForm(true); }} className="text-sm text-primary hover:underline">+ Position hinzufügen</button>
+                      <button onClick={() => { setPlItemForm({ title: "", description: "", unit: "pauschal", unitPrice: "", sortOrder: 0 }); setShowPlItemForm(true); }} className="text-sm text-primary hover:underline">+ Position hinzufügen</button>
                     )}
                   </div>
                 )}
               </div>
             ))}
-            {priceLists.length === 0 && <div className="text-center py-8 text-muted text-sm">Noch keine Preislisten vorhanden.</div>}
+            {priceLists.length === 0 && <div className="text-center py-8 text-muted text-sm">Noch keine Preislisten vorhanden. Erstellen Sie eine neue oder wählen Sie eine Vorlage.</div>}
           </div>
         </div>
       )}

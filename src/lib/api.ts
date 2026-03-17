@@ -405,8 +405,10 @@ export const api = {
   removeProductMember: (productId: string, teamMemberId: string) => apiFetch<any>(`/products/${productId}/members/${teamMemberId}`, { method: "DELETE" }),
   // Price Lists
   priceLists: (customerId: string) => apiFetch<any>(`/pricelists?customerId=${customerId}`),
+  priceListTemplates: () => apiFetch<any>("/pricelists/templates"),
   priceList: (id: string) => apiFetch<any>(`/pricelists/${id}`),
   createPriceList: (data: any) => apiFetch<any>("/pricelists", { method: "POST", body: JSON.stringify(data) }),
+  clonePriceList: (data: any) => apiFetch<any>("/pricelists/clone", { method: "POST", body: JSON.stringify(data) }),
   updatePriceList: (id: string, data: any) => apiFetch<any>(`/pricelists/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deletePriceList: (id: string) => apiFetch<any>(`/pricelists/${id}`, { method: "DELETE" }),
   addPriceListItem: (id: string, data: any) => apiFetch<any>(`/pricelists/${id}/items`, { method: "POST", body: JSON.stringify(data) }),
