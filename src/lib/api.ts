@@ -283,6 +283,12 @@ export const api = {
   updateReminderSettings: (data: ReminderSettings) => apiFetch<ReminderSettings>("/settings/reminders", { method: "PUT", body: JSON.stringify(data) }),
   numberRanges: (year?: number) => apiFetch<NumberRange[]>(`/settings/number-ranges${year ? `?year=${year}` : ""}`),
   updateNumberRange: (data: NumberRange) => apiFetch<NumberRange>("/settings/number-ranges", { method: "PUT", body: JSON.stringify(data) }),
+  importCustomersCsv: async (file: File) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const fd = new FormData(); fd.append("file", file);
+    const res = await fetch(`${API}/api/customers/import-csv`, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+    if (!res.ok) throw new Error(await res.text()); return res.json();
+  },
   uploadLogo: async (file: File) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const fd = new FormData(); fd.append("file", file);

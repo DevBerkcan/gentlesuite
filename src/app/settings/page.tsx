@@ -129,6 +129,24 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleInitDefaultRanges() {
+    const defaults = [
+      { entityType: "Invoice", prefix: "RE", nextValue: 20, padding: 4 },
+      { entityType: "Quote", prefix: "AN", nextValue: 1, padding: 4 },
+      { entityType: "CancellationInvoice", prefix: "SR", nextValue: 1, padding: 4 },
+    ];
+    try {
+      for (const d of defaults) {
+        const exists = numberRanges.find((r: any) => r.entityType === d.entityType);
+        if (!exists) await api.updateNumberRange({ ...d, year: numberYear });
+      }
+      const list = await api.numberRanges(numberYear);
+      setNumberRanges(list);
+      setSuccess("Standard-Nummernkreise für " + numberYear + " eingerichtet");
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (e: any) { setError(e?.message || "Fehler"); }
+  }
+
   if (!form) return <div className="p-8"><div className="text-muted">Laden...</div></div>;
 
   const f = (field: string, value: any) => setForm({ ...form, [field]: value });
@@ -333,6 +351,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2">
             <label className="text-sm text-muted">Jahr</label>
             <input type="number" min="2000" max="2100" value={numberYear} onChange={e => setNumberYear(Number(e.target.value))} className="w-24 px-3 py-2 border border-border rounded-lg text-sm" />
+            <button onClick={handleInitDefaultRanges} className="px-3 py-2 border border-border rounded-lg text-sm hover:bg-background">Standard einrichten</button>
           </div>
         </div>
         <div className="space-y-3">
@@ -359,7 +378,14 @@ export default function SettingsPage() {
               </div>
             </div>
           ))}
-          {numberRanges.length === 0 && <div className="text-sm text-muted">Keine Nummernkreise gefunden.</div>}
+          {numberRanges.length === 0 && (
+            <div className="text-sm text-muted p-4 border border-dashed border-border rounded-lg text-center">
+              Keine Nummernkreise für {numberYear} gefunden.
+              <button onClick={handleInitDefaultRanges} className="ml-2 text-primary font-medium hover:underline">
+                Standard einrichten (RE0020, AN0001, SR0001)
+              </button>
+            </div>
+          )}
         </div>
       </section>
 

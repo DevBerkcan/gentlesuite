@@ -44,6 +44,10 @@ export default function CustomersPage() {
   const [showQuick, setShowQuick] = useState(false);
   const [quickForm, setQuickForm] = useState({ email: "", companyName: "" });
   const [quickLoading, setQuickLoading] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvResult, setCsvResult] = useState<any>(null);
 
   const load = () => {
     const params = new URLSearchParams();
@@ -118,6 +122,7 @@ export default function CustomersPage() {
         <div className="flex items-center gap-3">
           <input placeholder="Suchen..." value={search} onChange={e => setSearch(e.target.value)} className="px-3 py-1.5 border border-border rounded-lg text-sm w-52" />
           <button onClick={() => setShowQuick(true)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">✉ Schnellerfassung</button>
+          <button onClick={() => { setShowCsvImport(true); setCsvFile(null); setCsvResult(null); }} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">↑ CSV-Import</button>
           <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90">+ Neuer Kunde</button>
         </div>
       </div>
@@ -266,6 +271,90 @@ export default function CustomersPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* CSV-Import Modal */}
+      {showCsvImport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCsvImport(false)}>
+          <div className="bg-surface rounded-xl border border-border p-6 w-full max-w-lg shadow-lg" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold mb-1">CSV-Import</h2>
+            <p className="text-sm text-muted mb-4">Importiere Kunden und Kontakte aus einer CSV-Datei (Semikolon-getrennt).</p>
+
+            {!csvResult ? (
+              <>
+                <div className="bg-background border border-border rounded-lg p-3 mb-4 text-xs text-muted font-mono">
+                  Firma;Vorname;Nachname;Email;Telefon;Position;Strasse;Ort;PLZ;Land;Branche;Website
+                </div>
+                <label className="block w-full cursor-pointer">
+                  <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${csvFile ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
+                    {csvFile ? (
+                      <div>
+                        <p className="font-medium text-sm">{csvFile.name}</p>
+                        <p className="text-xs text-muted mt-1">{(csvFile.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm font-medium">CSV-Datei auswählen</p>
+                        <p className="text-xs text-muted mt-1">.csv, Semikolon-getrennt, UTF-8</p>
+                      </div>
+                    )}
+                  </div>
+                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => setCsvFile(e.target.files?.[0] ?? null)} />
+                </label>
+                <div className="flex justify-end gap-3 mt-5">
+                  <button type="button" onClick={() => setShowCsvImport(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background">Abbrechen</button>
+                  <button
+                    type="button"
+                    disabled={!csvFile || csvLoading}
+                    onClick={async () => {
+                      if (!csvFile) return;
+                      setCsvLoading(true);
+                      try {
+                        const result = await api.importCustomersCsv(csvFile);
+                        setCsvResult(result);
+                        load();
+                      } catch (e: any) { setError(e.message); setShowCsvImport(false); }
+                      finally { setCsvLoading(false); }
+                    }}
+                    className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                  >
+                    {csvLoading ? "Importiere..." : "Importieren"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-success">{csvResult.imported}</p>
+                      <p className="text-xs text-muted">Importiert</p>
+                    </div>
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-warning">{csvResult.skipped}</p>
+                      <p className="text-xs text-muted">Übersprungen</p>
+                    </div>
+                    <div className="bg-gray-50 border border-border rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold">{csvResult.imported + csvResult.skipped}</p>
+                      <p className="text-xs text-muted">Gesamt</p>
+                    </div>
+                  </div>
+                  {csvResult.errors?.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                      <p className="text-xs font-semibold text-danger mb-2">Fehler:</p>
+                      {csvResult.errors.map((e: string, i: number) => (
+                        <p key={i} className="text-xs text-danger">{e}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end mt-5">
+                  <button onClick={() => setShowCsvImport(false)} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90">Fertig</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
