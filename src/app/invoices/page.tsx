@@ -14,8 +14,18 @@ export default function InvoicesPage() {
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [xmlDownloading, setXmlDownloading] = useState<string | null>(null);
+  const [reminderSending, setReminderSending] = useState<string | null>(null);
+  const [success, setSuccess] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
-  const load = (status = "") => api.invoices(status ? `status=${status}` : "").then(setData).catch(() => setError("Rechnungen konnten nicht geladen werden"));
+  const load = (status = "", p = 1) => {
+    const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
+    if (status) params.set("status", status);
+    api.invoices(params.toString()).then(setData).catch(() => setError("Rechnungen konnten nicht geladen werden"));
+  };
   useEffect(() => { load(); }, []);
 
   const handleXmlDownload = async (id: string, invoiceNumber: string, e: React.MouseEvent) => {
@@ -59,12 +69,40 @@ export default function InvoicesPage() {
     } catch (e: any) { setError(e.message); } finally { setSaving(false); }
   };
 
+  const toggleSelect = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = () => { const ids = data?.items?.map((i: any) => i.id) || []; setSelected(s => s.size === ids.length ? new Set() : new Set(ids)); };
+
+  const handleBulkFinalize = async () => {
+    if (!selected.size || !confirm(`${selected.size} Rechnungen finalisieren?`)) return;
+    setBulkBusy(true);
+    try { await api.bulkFinalizeInvoices([...selected]); setSelected(new Set()); setSuccess(`${selected.size} Rechnungen finalisiert.`); setTimeout(() => setSuccess(""), 4000); load(statusFilter, page); }
+    catch { setError("Fehler beim Finalisieren."); } finally { setBulkBusy(false); }
+  };
+
+  const handleBulkSend = async () => {
+    if (!selected.size || !confirm(`${selected.size} Rechnungen per E-Mail senden?`)) return;
+    setBulkBusy(true);
+    try { await api.bulkSendInvoices([...selected]); setSelected(new Set()); setSuccess(`${selected.size} Rechnungen gesendet.`); setTimeout(() => setSuccess(""), 4000); load(statusFilter, page); }
+    catch { setError("Fehler beim Senden."); } finally { setBulkBusy(false); }
+  };
+
+  const handleReminder = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Mahnungs-E-Mail an den Kunden senden?")) return;
+    setReminderSending(id);
+    try {
+      await api.sendInvoiceReminder(id);
+      setSuccess("Mahnung wurde gesendet."); setTimeout(() => setSuccess(""), 4000);
+    } catch { setError("Mahnung konnte nicht gesendet werden."); }
+    finally { setReminderSending(null); }
+  };
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold">Rechnungen</h1>
-          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); load(e.target.value); }} className="px-3 py-1.5 border border-border rounded-lg text-sm">
+          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); load(e.target.value, 1); }} className="px-3 py-1.5 border border-border rounded-lg text-sm">
             <option value="">Alle Status</option>
             <option value="Draft">Entwurf</option>
             <option value="Final">Final</option>
@@ -74,16 +112,28 @@ export default function InvoicesPage() {
             <option value="Cancelled">Storniert</option>
           </select>
         </div>
-        <button onClick={openModal} className="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:opacity-90">+ Neue Rechnung</button>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <>
+              <span className="text-sm text-muted">{selected.size} ausgewählt</span>
+              <button onClick={handleBulkFinalize} disabled={bulkBusy} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-background disabled:opacity-50">Finalisieren</button>
+              <button onClick={handleBulkSend} disabled={bulkBusy} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-background disabled:opacity-50">Senden</button>
+            </>
+          )}
+          <a href={api.exportInvoicesCsv(statusFilter || undefined)} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-background">CSV Export</a>
+          <button onClick={openModal} className="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:opacity-90">+ Neue Rechnung</button>
+        </div>
       </div>
 
       {error && <div className="bg-red-50 text-danger px-4 py-2 rounded-lg mb-4 text-sm">{error}<button onClick={() => setError("")} className="ml-2 font-bold">x</button></div>}
+      {success && <div className="bg-green-50 text-success px-4 py-2 rounded-lg mb-4 text-sm">{success}</div>}
 
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
         <table className="w-full">
-          <thead><tr className="border-b border-border bg-background"><th className="px-4 py-3 text-left text-xs text-muted">Nr.</th><th className="px-4 py-3 text-left text-xs text-muted">Kunde</th><th className="px-4 py-3 text-left text-xs text-muted">Status</th><th className="px-4 py-3 text-right text-xs text-muted">Brutto</th><th className="px-4 py-3 text-left text-xs text-muted">Faellig</th><th className="px-4 py-3 text-left text-xs text-muted">Dokumente</th></tr></thead>
+          <thead><tr className="border-b border-border bg-background"><th className="px-4 py-3 w-8"><input type="checkbox" onChange={toggleAll} checked={!!data?.items?.length && selected.size === data.items.length} className="accent-primary" /></th><th className="px-4 py-3 text-left text-xs text-muted">Nr.</th><th className="px-4 py-3 text-left text-xs text-muted">Kunde</th><th className="px-4 py-3 text-left text-xs text-muted">Status</th><th className="px-4 py-3 text-right text-xs text-muted">Brutto</th><th className="px-4 py-3 text-left text-xs text-muted">Faellig</th><th className="px-4 py-3 text-left text-xs text-muted">Dokumente</th></tr></thead>
           <tbody>{data?.items?.map((i: any) => (
-            <tr key={i.id} className="border-b border-border hover:bg-background cursor-pointer" onClick={() => window.location.href = `/invoices/${i.id}`}>
+            <tr key={i.id} className={`border-b border-border hover:bg-background cursor-pointer ${selected.has(i.id) ? "bg-primary/5" : ""}`} onClick={() => window.location.href = `/invoices/${i.id}`}>
+              <td className="px-4 py-3 w-8" onClick={e => { e.stopPropagation(); toggleSelect(i.id); }}><input type="checkbox" checked={selected.has(i.id)} onChange={() => {}} className="accent-primary" /></td>
               <td className="px-4 py-3 font-medium">{i.invoiceNumber}</td>
               <td className="px-4 py-3">{i.customerName}</td>
               <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full ${i.status === "Paid" ? "bg-green-50 text-success" : i.status === "Overdue" ? "bg-red-50 text-danger" : "bg-yellow-50 text-warning"}`}>{i.status}</span></td>
@@ -96,12 +146,27 @@ export default function InvoicesPage() {
                     {xmlDownloading === i.id ? "…" : "XML"}
                   </button>
                 )}
+                {(i.status === "Overdue" || i.status === "Open" || i.status === "Sent") && (
+                  <button onClick={e => handleReminder(i.id, e)} disabled={reminderSending === i.id} className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded-full hover:bg-orange-100 disabled:opacity-50">
+                    {reminderSending === i.id ? "…" : "Mahnung"}
+                  </button>
+                )}
               </td>
             </tr>
           ))}</tbody>
         </table>
         {data?.items?.length === 0 && <div className="p-8 text-center text-muted text-sm">Keine Rechnungen vorhanden.</div>}
       </div>
+      {data?.totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-sm text-muted">{data.totalCount} Rechnungen gesamt</span>
+          <div className="flex items-center gap-2">
+            <button disabled={page <= 1} onClick={() => { const p = page - 1; setPage(p); load(statusFilter, p); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-background disabled:opacity-40">← Zurück</button>
+            <span className="text-sm text-muted">Seite {page} / {data.totalPages}</span>
+            <button disabled={page >= data.totalPages} onClick={() => { const p = page + 1; setPage(p); load(statusFilter, p); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-background disabled:opacity-40">Weiter →</button>
+          </div>
+        </div>
+      )}
 
       {show && <div className="fixed inset-0 bg-black/40 flex items-start justify-center pt-10 z-50 overflow-auto">
         <div className="bg-surface rounded-xl border border-border p-6 w-full max-w-3xl shadow-xl mb-10">

@@ -33,3 +33,17 @@ body {
   background: rgb(var(--color-background));
   color: rgb(var(--color-text));
 }
+
+/* Mobile: make all tables scrollable horizontally */
+@media (max-width: 768px) {
+  .overflow-hidden table,
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Reduce page padding on mobile */
+  .p-8 {
+    padding: 1rem !important;
+  }
+}

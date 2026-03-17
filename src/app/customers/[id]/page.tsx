@@ -40,6 +40,11 @@ export default function CustomerDetailPage() {
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   const [plItemForm, setPlItemForm] = useState({ title: "", description: "", unit: "pauschal", unitPrice: "", sortOrder: 0 });
   const [showPlItemForm, setShowPlItemForm] = useState(false);
+  const [expandedWorkflow, setExpandedWorkflow] = useState<string | null>(null);
+  const [intakeResending, setIntakeResending] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailForm, setEmailForm] = useState({ to: "", subject: "", body: "" });
+  const [emailSending, setEmailSending] = useState(false);
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
   const [crmActivities, setCrmActivities] = useState<any[]>([]);
@@ -121,6 +126,33 @@ export default function CustomerDetailPage() {
       await api.deleteNote(id, noteId);
       loadNotes();
     } catch { setError("Fehler beim Loeschen"); }
+  }
+
+  function openEmailModal() {
+    const primaryEmail = customer?.contacts?.find((c: any) => c.isPrimary)?.email || customer?.contacts?.[0]?.email || "";
+    setEmailForm({ to: primaryEmail, subject: "", body: "" });
+    setShowEmailModal(true);
+  }
+
+  async function handleSendEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setEmailSending(true);
+    try {
+      await api.sendCustomerEmail(id, emailForm);
+      setShowEmailModal(false);
+      setSuccess("E-Mail wurde gesendet.");
+      setTimeout(() => setSuccess(""), 4000);
+    } catch { setError("E-Mail konnte nicht gesendet werden."); }
+    finally { setEmailSending(false); }
+  }
+
+  async function handleResendIntake() {
+    setIntakeResending(true);
+    try {
+      await api.resendIntake(id);
+      setSuccess("Intake-E-Mail wurde erneut gesendet.");
+    } catch { setError("E-Mail konnte nicht gesendet werden."); }
+    finally { setIntakeResending(false); }
   }
 
   async function handleStartOnboarding() {
@@ -398,7 +430,10 @@ export default function CustomerDetailPage() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="font-semibold">Kontakte</h2>
-            <button onClick={() => setShowContactForm(true)} className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium">+ Kontakt</button>
+            <div className="flex gap-2">
+              <button onClick={openEmailModal} className="px-3 py-1.5 border border-border rounded-lg text-sm font-medium">E-Mail senden</button>
+              <button onClick={() => setShowContactForm(true)} className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium">+ Kontakt</button>
+            </div>
           </div>
           <div className="bg-surface rounded-xl border border-border overflow-hidden">
             <table className="w-full">
@@ -552,6 +587,29 @@ export default function CustomerDetailPage() {
 
       {tab === "onboarding" && (
         <div>
+          {/* Intake-Status-Box */}
+          <div className="bg-surface rounded-xl border border-border p-5 mb-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="font-semibold mb-1">Daten-Intake</h2>
+                <p className="text-sm text-muted">E-Mail wurde bei Anlage automatisch verschickt.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {customer?.onboardingIntakeDone ? (
+                  <span className="text-xs px-3 py-1 rounded-full bg-green-50 text-success font-medium">✓ Abgeschlossen</span>
+                ) : customer?.intakePending ? (
+                  <>
+                    <span className="text-xs px-3 py-1 rounded-full bg-yellow-50 text-warning font-medium">● Ausstehend</span>
+                    <button onClick={handleResendIntake} disabled={intakeResending} className="px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                      {intakeResending ? "Sendet..." : "E-Mail erneut senden"}
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-muted font-medium">Kein Intake</span>
+                )}
+              </div>
+            </div>
+          </div>
           <div className="bg-surface rounded-xl border border-border p-5 mb-4">
             <div className="flex justify-between items-center mb-2">
               <h2 className="font-semibold">Stammdaten-Onboarding</h2>
@@ -577,36 +635,92 @@ export default function CustomerDetailPage() {
           <div className="bg-surface rounded-xl border border-border p-5 mt-6">
             <div className="flex justify-between items-center mb-3">
               <h2 className="font-semibold">Onboarding-Workflows</h2>
-              {workflows.length === 0 && (
-                <div className="flex items-center gap-2">
-                  <select value={selectedOnbTemplate} onChange={e => setSelectedOnbTemplate(e.target.value)} className="px-3 py-2 border border-border rounded-lg text-sm">
-                    <option value="" disabled>Template waehlen...</option>
-                    {onbTemplates.map((t: any) => <option key={t.id} value={t.id}>{t.name}{t.isDefault ? " (Default)" : ""}</option>)}
-                  </select>
-                  <button onClick={handleStartOnboarding} className="px-3 py-2 bg-primary text-white rounded-lg text-sm">Starten</button>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <select value={selectedOnbTemplate} onChange={e => setSelectedOnbTemplate(e.target.value)} className="px-3 py-2 border border-border rounded-lg text-sm">
+                  <option value="" disabled>Template wählen...</option>
+                  {onbTemplates.map((t: any) => <option key={t.id} value={t.id}>{t.name}{t.isDefault ? " (Standard)" : ""}</option>)}
+                </select>
+                <button onClick={handleStartOnboarding} className="px-3 py-2 bg-primary text-white rounded-lg text-sm font-medium">+ Starten</button>
+              </div>
             </div>
             {workflows.length === 0 ? (
               <p className="text-sm text-muted">Kein Onboarding-Workflow gestartet.</p>
             ) : (
               <div className="space-y-3">
                 {workflows.map((wf: any) => {
-                  const total = wf.steps?.length || 0;
-                  const done = wf.steps?.filter((s: any) => s.status === "Completed").length || 0;
+                  const steps = wf.steps || [];
+                  const total = steps.length;
+                  const done = steps.filter((s: any) => s.status === "Completed").length;
                   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                  const isExpanded = expandedWorkflow === wf.id;
                   return (
-                    <div key={wf.id} className="border border-border rounded-lg p-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium text-sm">{wf.templateName || "Workflow"}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${wf.status === "Completed" ? "bg-green-50 text-success" : "bg-blue-50 text-blue-700"}`}>{wf.status === "Completed" ? "Abgeschlossen" : "In Arbeit"}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-success rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    <div key={wf.id} className="border border-border rounded-lg overflow-hidden">
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-background" onClick={() => setExpandedWorkflow(isExpanded ? null : wf.id)}>
+                        <div className="flex items-center gap-3 flex-1">
+                          <span className="font-medium text-sm">{wf.templateName || "Workflow"}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${wf.status === "Completed" ? "bg-green-50 text-success" : "bg-blue-50 text-blue-700"}`}>{wf.status === "Completed" ? "Abgeschlossen" : "In Arbeit"}</span>
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden max-w-[120px]">
+                              <div className="h-full bg-success rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-xs text-muted">{done}/{total}</span>
+                          </div>
                         </div>
-                        <span className="text-xs text-muted">{done}/{total} ({pct}%)</span>
+                        <span className="text-muted text-sm ml-2">{isExpanded ? "▲" : "▼"}</span>
                       </div>
+
+                      {/* Steps */}
+                      {isExpanded && (
+                        <div className="border-t border-border divide-y divide-border">
+                          {steps.sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((step: any) => {
+                            const stepDone = step.status === "Completed";
+                            const tasks = step.tasks || [];
+                            return (
+                              <div key={step.id} className={`px-4 py-3 ${stepDone ? "bg-green-50/30" : ""}`}>
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.updateStepStatus(step.id, { status: stepDone ? "InProgress" : "Completed" });
+                                        loadWorkflows();
+                                      } catch (ex: any) { setError(ex.message); }
+                                    }}
+                                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${stepDone ? "bg-success border-success text-white" : "border-gray-300 hover:border-primary"}`}
+                                  >
+                                    {stepDone && <span className="text-xs">✓</span>}
+                                  </button>
+                                  <span className={`text-sm font-medium ${stepDone ? "line-through text-muted" : ""}`}>{step.title}</span>
+                                  {step.dueDate && <span className="text-xs text-muted ml-auto">{new Date(step.dueDate).toLocaleDateString("de")}</span>}
+                                </div>
+                                {tasks.length > 0 && (
+                                  <div className="ml-8 mt-2 space-y-1.5">
+                                    {tasks.sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((task: any) => {
+                                      const taskDone = task.status === "Done";
+                                      return (
+                                        <div key={task.id} className="flex items-center gap-2">
+                                          <button
+                                            onClick={async () => {
+                                              try {
+                                                await api.updateTask(task.id, { status: taskDone ? "Pending" : "Done" });
+                                                loadWorkflows();
+                                              } catch (ex: any) { setError(ex.message); }
+                                            }}
+                                            className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${taskDone ? "bg-success border-success text-white" : "border-gray-300 hover:border-primary"}`}
+                                          >
+                                            {taskDone && <span className="text-[10px]">✓</span>}
+                                          </button>
+                                          <span className={`text-xs ${taskDone ? "line-through text-muted" : "text-text"}`}>{task.title}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -974,5 +1088,31 @@ export default function CustomerDetailPage() {
         </div>
       )}
     </div>
+
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-surface rounded-xl border border-border p-6 w-full max-w-lg shadow-xl">
+            <h2 className="text-lg font-bold mb-4">E-Mail senden</h2>
+            <form onSubmit={handleSendEmail} className="space-y-3">
+              <div>
+                <label className="text-xs text-muted block mb-1">An *</label>
+                <input type="email" required value={emailForm.to} onChange={e => setEmailForm({...emailForm, to: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+              </div>
+              <div>
+                <label className="text-xs text-muted block mb-1">Betreff *</label>
+                <input required value={emailForm.subject} onChange={e => setEmailForm({...emailForm, subject: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+              </div>
+              <div>
+                <label className="text-xs text-muted block mb-1">Nachricht</label>
+                <textarea rows={6} value={emailForm.body} onChange={e => setEmailForm({...emailForm, body: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="submit" disabled={emailSending} className="flex-1 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50">{emailSending ? "Sendet..." : "Senden"}</button>
+                <button type="button" onClick={() => setShowEmailModal(false)} className="px-4 py-2 border border-border rounded-lg text-sm">Abbrechen</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
   );
 }

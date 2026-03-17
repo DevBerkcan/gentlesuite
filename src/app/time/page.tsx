@@ -41,6 +41,11 @@ export default function TimePage() {
   const [filterTo, setFilterTo] = useState(formatDate(weekEnd));
   const [filterProject, setFilterProject] = useState("");
   const [filterBillable, setFilterBillable] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [invoiceModal, setInvoiceModal] = useState(false);
+  const [invoiceCustomerId, setInvoiceCustomerId] = useState("");
+  const [invoiceSubject, setInvoiceSubject] = useState("");
+  const [invoicing, setInvoicing] = useState(false);
 
   function buildFilterParams() {
     const parts: string[] = [];
@@ -110,6 +115,23 @@ export default function TimePage() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  }
+
+  async function handleInvoice() {
+    if (!invoiceCustomerId) { setError("Bitte Kunde auswählen."); return; }
+    setInvoicing(true);
+    try {
+      const inv = await api.createInvoiceFromTimeEntries({ customerId: invoiceCustomerId, timeEntryIds: Array.from(selected), subject: invoiceSubject || undefined });
+      setInvoiceModal(false); setSelected(new Set());
+      setSuccess(`Rechnung ${inv.invoiceNumber} erstellt.`);
+      setTimeout(() => setSuccess(""), 5000);
+      load();
+    } catch (e: any) { setError(e.message || "Fehler beim Erstellen der Rechnung"); }
+    finally { setInvoicing(false); }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("Zeiteintrag wirklich loeschen?")) return;
     try {
@@ -125,7 +147,14 @@ export default function TimePage() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Zeiterfassung</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">Zeiterfassung</h1>
+          {selected.size > 0 && (
+            <button onClick={() => setInvoiceModal(true)} className="px-3 py-1.5 bg-success text-white rounded-lg text-sm font-medium">
+              {selected.size} Einträge fakturieren
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="px-3 py-1.5 border border-border rounded-lg text-sm" />
           <span className="text-sm text-muted">bis</span>
@@ -219,6 +248,7 @@ export default function TimePage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border bg-background">
+              <th className="w-8 px-4 py-3"></th>
               <th className="px-4 py-3 text-left text-xs text-muted">Datum</th>
               <th className="px-4 py-3 text-left text-xs text-muted">Projekt</th>
               <th className="px-4 py-3 text-left text-xs text-muted">Kunde</th>
@@ -230,7 +260,13 @@ export default function TimePage() {
           </thead>
           <tbody>
             {entries.map((e: any) => (
-              <tr key={e.id} className={`border-b border-border hover:bg-background ${editId === e.id ? "bg-primary/5" : ""}`}>
+              <tr key={e.id} className={`border-b border-border hover:bg-background ${editId === e.id ? "bg-primary/5" : ""} ${selected.has(e.id) ? "bg-blue-50" : ""}`}>
+                <td className="px-4 py-2 w-8">
+                  {!e.isInvoiced && e.isBillable && (
+                    <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleSelect(e.id)} className="accent-primary" onClick={ev => ev.stopPropagation()} />
+                  )}
+                  {e.isInvoiced && <span className="text-xs text-success">✓</span>}
+                </td>
                 <td className="px-4 py-3 text-sm">{new Date(e.date).toLocaleDateString("de")}</td>
                 <td className="px-4 py-3 text-sm">{e.projectName || "–"}</td>
                 <td className="px-4 py-3 text-sm">{e.customerName || "–"}</td>
@@ -247,6 +283,32 @@ export default function TimePage() {
         </table>
         {entries.length === 0 && <div className="p-8 text-center text-muted text-sm">Keine Zeiteintraege vorhanden.</div>}
       </div>
+
+      {invoiceModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-surface rounded-xl border border-border p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-lg font-bold mb-4">Rechnung aus Zeiteinträgen</h2>
+            <p className="text-sm text-muted mb-4">{selected.size} Einträge werden fakturiert.</p>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="text-xs text-muted block mb-1">Kunde *</label>
+                <select value={invoiceCustomerId} onChange={e => setInvoiceCustomerId(e.target.value)} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
+                  <option value="">Bitte wählen...</option>
+                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted block mb-1">Betreff (optional)</label>
+                <input value={invoiceSubject} onChange={e => setInvoiceSubject(e.target.value)} placeholder="z.B. Webprojekt März 2025" className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleInvoice} disabled={invoicing} className="flex-1 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-50">{invoicing ? "Erstelle..." : "Rechnung erstellen"}</button>
+              <button onClick={() => setInvoiceModal(false)} className="px-4 py-2 border border-border rounded-lg text-sm">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

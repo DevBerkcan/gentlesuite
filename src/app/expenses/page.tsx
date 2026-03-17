@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
-const defaultForm = { supplier: "", description: "", netAmount: 0, vatPercent: 19, expenseCategoryId: "" };
+const defaultForm = { supplier: "", description: "", netAmount: 0, vatPercent: 19, expenseCategoryId: "", isRecurring: false, recurringInterval: "Monthly", recurringNextDate: "" };
 
 export default function ExpensesPage() {
   const [data, setData] = useState<any>(null);
@@ -14,6 +14,8 @@ export default function ExpensesPage() {
   const [success, setSuccess] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [catFilter, setCatFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   // Category management
   const [showCatMgr, setShowCatMgr] = useState(false);
@@ -22,8 +24,10 @@ export default function ExpensesPage() {
 
   const loadCats = () => api.expenseCategories().then(setCats).catch(() => {});
 
+  const loadExpenses = (p = 1) => api.expenses(`page=${p}&pageSize=${pageSize}`).then(setData).catch(() => setError("Ausgaben konnten nicht geladen werden"));
+
   useEffect(() => {
-    api.expenses().then(setData).catch(() => setError("Ausgaben konnten nicht geladen werden"));
+    loadExpenses();
     loadCats();
   }, []);
 
@@ -71,7 +75,7 @@ export default function ExpensesPage() {
       setError("");
       setSuccess("Ausgabe erfolgreich erfasst");
       setTimeout(() => setSuccess(""), 4000);
-      api.expenses().then(setData);
+      loadExpenses(page);
     } catch (e: any) { setError(e?.message || "Fehler beim Erfassen der Ausgabe"); }
   }
 
@@ -101,11 +105,21 @@ export default function ExpensesPage() {
         <table className="w-full">
           <thead><tr className="border-b border-border bg-background"><th className="px-4 py-3 text-left text-xs text-muted">Nr.</th><th className="px-4 py-3 text-left text-xs text-muted">Lieferant</th><th className="px-4 py-3 text-left text-xs text-muted">Kategorie</th><th className="px-4 py-3 text-right text-xs text-muted">Brutto</th><th className="px-4 py-3 text-left text-xs text-muted">Datum</th></tr></thead>
           <tbody>{filteredItems.map((e: any) => (
-            <tr key={e.id} className="border-b border-border hover:bg-background cursor-pointer" onClick={() => window.location.href = `/expenses/${e.id}`}><td className="px-4 py-3">{e.expenseNumber}</td><td className="px-4 py-3">{e.supplier}</td><td className="px-4 py-3 text-sm text-muted">{e.categoryName}</td><td className="px-4 py-3 text-right font-medium">{e.grossAmount?.toFixed(2)} EUR</td><td className="px-4 py-3 text-sm text-muted">{new Date(e.expenseDate).toLocaleDateString("de")}</td></tr>
+            <tr key={e.id} className="border-b border-border hover:bg-background cursor-pointer" onClick={() => window.location.href = `/expenses/${e.id}`}><td className="px-4 py-3">{e.expenseNumber}</td><td className="px-4 py-3 flex items-center gap-2">{e.supplier}{e.isRecurring && <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">Wiederkehrend</span>}</td><td className="px-4 py-3 text-sm text-muted">{e.categoryName}</td><td className="px-4 py-3 text-right font-medium">{e.grossAmount?.toFixed(2)} EUR</td><td className="px-4 py-3 text-sm text-muted">{new Date(e.expenseDate).toLocaleDateString("de")}</td></tr>
           ))}</tbody>
         </table>
         {filteredItems.length === 0 && <div className="p-8 text-center text-muted text-sm">Keine Ausgaben vorhanden.</div>}
       </div>
+      {data?.totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-sm text-muted">{data.totalCount} Ausgaben gesamt</span>
+          <div className="flex items-center gap-2">
+            <button disabled={page <= 1} onClick={() => { const p = page - 1; setPage(p); loadExpenses(p); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-background disabled:opacity-40">← Zurück</button>
+            <span className="text-sm text-muted">Seite {page} / {data.totalPages}</span>
+            <button disabled={page >= data.totalPages} onClick={() => { const p = page + 1; setPage(p); loadExpenses(p); }} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-background disabled:opacity-40">Weiter →</button>
+          </div>
+        </div>
+      )}
       {showCatMgr && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setShowCatMgr(false); setEditCatId(null); setCatForm({ name: "", description: "", accountCode: "" }); }}>
           <div className="bg-surface rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -164,6 +178,28 @@ export default function ExpensesPage() {
                 {fieldErrors.vatPercent && <p className="text-xs text-danger mt-1">{fieldErrors.vatPercent}</p>}
               </div>
               <div><label className="block text-sm font-medium mb-1">Beschreibung</label><textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full px-3 py-2 border border-border rounded-lg" /></div>
+              <div className="flex items-center gap-3 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={form.isRecurring} onChange={e => setForm({...form, isRecurring: e.target.checked})} className="w-4 h-4 accent-primary" />
+                  <span className="text-sm font-medium">Wiederkehrende Ausgabe</span>
+                </label>
+              </div>
+              {form.isRecurring && (
+                <div className="grid grid-cols-2 gap-3 bg-blue-50 rounded-lg p-3">
+                  <div>
+                    <label className="block text-xs text-muted mb-1">Intervall</label>
+                    <select value={form.recurringInterval} onChange={e => setForm({...form, recurringInterval: e.target.value})} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background">
+                      <option value="Monthly">Monatlich</option>
+                      <option value="Quarterly">Quartalsweise</option>
+                      <option value="Yearly">Jährlich</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted mb-1">Nächste Ausführung</label>
+                    <input type="date" value={form.recurringNextDate} onChange={e => setForm({...form, recurringNextDate: e.target.value})} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background" />
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2"><button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium">Speichern</button><button type="button" onClick={() => { setShowNew(false); setFieldErrors({}); }} className="px-4 py-2 border border-border rounded-lg text-sm">Abbrechen</button></div>
             </form>
           </div>

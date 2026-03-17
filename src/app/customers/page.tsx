@@ -122,6 +122,7 @@ export default function CustomersPage() {
         <div className="flex items-center gap-3">
           <input placeholder="Suchen..." value={search} onChange={e => setSearch(e.target.value)} className="px-3 py-1.5 border border-border rounded-lg text-sm w-52" />
           <button onClick={() => setShowQuick(true)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">✉ Schnellerfassung</button>
+          <a href={api.exportCustomersCsv(statusFilter || undefined)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">↓ CSV-Export</a>
           <button onClick={() => { setShowCsvImport(true); setCsvFile(null); setCsvResult(null); }} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background transition-colors">↑ CSV-Import</button>
           <button onClick={() => setShowNew(true)} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:opacity-90">+ Neuer Kunde</button>
         </div>

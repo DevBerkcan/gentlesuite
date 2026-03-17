@@ -17,7 +17,7 @@ export default function ExpenseDetailPage() {
   useEffect(() => { load(); api.expenseCategories().then(setCats).catch(() => {}); }, [id]);
 
   const startEdit = () => {
-    setForm({ supplier: exp.supplier, supplierTaxId: exp.supplierTaxId, description: exp.description, netAmount: exp.netAmount, vatPercent: exp.vatPercent, expenseCategoryId: exp.category?.id || "" });
+    setForm({ supplier: exp.supplier, supplierTaxId: exp.supplierTaxId, description: exp.description, netAmount: exp.netAmount, vatPercent: exp.vatPercent, expenseCategoryId: exp.category?.id || "", isRecurring: exp.isRecurring || false, recurringInterval: exp.recurringInterval || "Monthly", recurringNextDate: exp.recurringNextDate?.split("T")[0] || "" });
     setEditing(true);
   };
 
@@ -73,6 +73,10 @@ export default function ExpenseDetailPage() {
             <div><span className="text-muted">Netto:</span> <span className="font-medium ml-1">{exp.netAmount?.toFixed(2)} EUR</span></div>
             <div><span className="text-muted">MwSt:</span> <span className="font-medium ml-1">{exp.vatPercent}% ({exp.vatAmount?.toFixed(2)} EUR)</span></div>
             <div><span className="text-muted">Brutto:</span> <span className="font-medium ml-1">{exp.grossAmount?.toFixed(2)} EUR</span></div>
+            {exp.isRecurring && <>
+              <div><span className="text-muted">Wiederkehrend:</span> <span className="font-medium ml-1 text-blue-700">{{ Monthly: "Monatlich", Quarterly: "Quartalsweise", Yearly: "Jährlich" }[exp.recurringInterval as string] || exp.recurringInterval}</span></div>
+              <div><span className="text-muted">Nächste Ausführung:</span> <span className="font-medium ml-1">{exp.recurringNextDate ? new Date(exp.recurringNextDate).toLocaleDateString("de") : "–"}</span></div>
+            </>}
           </div>
           {exp.description && <p className="text-sm mt-4 text-muted">{exp.description}</p>}
         </div>
@@ -86,6 +90,24 @@ export default function ExpenseDetailPage() {
             <div><label className="text-xs text-muted block mb-1">MwSt %</label><select value={form.vatPercent} onChange={e => setForm({...form, vatPercent: +e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background"><option value={19}>19%</option><option value={7}>7%</option><option value={0}>0%</option></select></div>
           </div>
           <div><label className="text-xs text-muted block mb-1">Beschreibung</label><textarea value={form.description || ""} onChange={e => setForm({...form, description: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" /></div>
+          <div className="flex items-center gap-3 pt-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={form.isRecurring} onChange={e => setForm({...form, isRecurring: e.target.checked})} className="w-4 h-4 accent-primary" />
+              <span className="text-sm font-medium">Wiederkehrende Ausgabe</span>
+            </label>
+          </div>
+          {form.isRecurring && (
+            <div className="grid grid-cols-2 gap-3 bg-blue-50 rounded-lg p-3">
+              <div><label className="text-xs text-muted block mb-1">Intervall</label>
+                <select value={form.recurringInterval} onChange={e => setForm({...form, recurringInterval: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
+                  <option value="Monthly">Monatlich</option>
+                  <option value="Quarterly">Quartalsweise</option>
+                  <option value="Yearly">Jährlich</option>
+                </select>
+              </div>
+              <div><label className="text-xs text-muted block mb-1">Nächste Ausführung</label><input type="date" value={form.recurringNextDate} onChange={e => setForm({...form, recurringNextDate: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" /></div>
+            </div>
+          )}
           <div className="flex gap-2"><button onClick={saveEdit} className="px-4 py-2 bg-primary text-white rounded-lg text-sm">Speichern</button><button onClick={() => setEditing(false)} className="px-4 py-2 border border-border rounded-lg text-sm">Abbrechen</button></div>
         </div>
       )}

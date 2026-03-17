@@ -105,7 +105,7 @@ export default function ProjectDetailPage() {
     return byStatus;
   }, [boardTasks]);
 
-  const startEdit = () => { setForm({ name: project.name, description: project.description || "", status: project.status, startDate: project.startDate?.split("T")[0] || "", dueDate: project.dueDate?.split("T")[0] || "" }); setEditing(true); };
+  const startEdit = () => { setForm({ name: project.name, description: project.description || "", status: project.status, startDate: project.startDate?.split("T")[0] || "", dueDate: project.dueDate?.split("T")[0] || "", budgetHours: project.budgetHours ?? "" }); setEditing(true); };
   const saveEdit = async () => { try { await api.updateProject(id, form); setEditing(false); setSuccess("Gespeichert"); setTimeout(() => setSuccess(""), 3000); load(); } catch (e: any) { setError(e.message); } };
   const handleDelete = async () => { if (!confirm("Projekt wirklich loeschen?")) return; try { await api.deleteProject(id); window.location.href = "/projects"; } catch (e: any) { setError(e.message); } };
   const toggleTask = async (taskId: string, currentStatus: string) => {
@@ -252,6 +252,7 @@ export default function ProjectDetailPage() {
           <div><label className="text-xs text-muted block mb-1">Status</label><select value={form.status} onChange={e => setForm({...form, status: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background"><option value="Planning">Planung</option><option value="InProgress">In Arbeit</option><option value="Completed">Abgeschlossen</option><option value="OnHold">Pausiert</option></select></div>
           <div><label className="text-xs text-muted block mb-1">Start</label><input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" /></div>
           <div><label className="text-xs text-muted block mb-1">Faellig</label><input type="date" value={form.dueDate} onChange={e => setForm({...form, dueDate: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" /></div>
+          <div><label className="text-xs text-muted block mb-1">Budget (Stunden)</label><input type="number" step="0.5" min="0" value={form.budgetHours} onChange={e => setForm({...form, budgetHours: e.target.value === "" ? "" : +e.target.value})} placeholder="z.B. 40" className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" /></div>
         </div>
         <div><label className="text-xs text-muted block mb-1">Beschreibung</label><textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" rows={2} /></div>
         <div className="flex gap-2"><button onClick={saveEdit} className="px-4 py-2 bg-primary text-white rounded-lg text-sm">Speichern</button><button onClick={() => setEditing(false)} className="px-4 py-2 border border-border rounded-lg text-sm">Abbrechen</button></div>
@@ -265,6 +266,24 @@ export default function ProjectDetailPage() {
           <div><span className="text-muted">Faellig:</span> <span className="font-medium ml-1">{project.dueDate ? new Date(project.dueDate).toLocaleDateString("de") : "–"}</span></div>
         </div>
         {project.description && <p className="text-sm mt-4 text-muted">{project.description}</p>}
+        {(project.budgetHours != null || project.totalLoggedHours > 0) && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-muted">Stundenbudget</span>
+              <span className="font-medium">
+                {project.totalLoggedHours?.toFixed(1)} h{project.budgetHours != null ? ` / ${project.budgetHours} h` : " erfasst"}
+              </span>
+            </div>
+            {project.budgetHours != null && (
+              <div className="w-full h-2 bg-background rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${(project.totalLoggedHours / project.budgetHours) > 0.9 ? "bg-danger" : (project.totalLoggedHours / project.budgetHours) > 0.7 ? "bg-warning" : "bg-success"}`}
+                  style={{ width: `${Math.min(100, (project.totalLoggedHours / project.budgetHours) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="bg-surface rounded-xl border border-border p-6 mb-6">

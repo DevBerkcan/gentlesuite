@@ -38,6 +38,9 @@ export default function LoginPage() {
             </div>
             <button type="submit" className="w-full py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors">Anmelden</button>
           </div>
+          <div className="text-center mt-4">
+            <a href="/forgot-password" className="text-sm text-muted hover:text-primary">Passwort vergessen?</a>
+          </div>
         </form>
       </div>
     </div>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Sun, Moon, Plus, Receipt, FileText, Wallet, FolderKanban, ChevronDown, Settings, LogOut, Search, X } from "lucide-react";
+import { Sun, Moon, Plus, Receipt, FileText, Wallet, FolderKanban, ChevronDown, Settings, LogOut, Search, X, Menu } from "lucide-react";
 import { api } from "@/lib/api";
 
 const quickActions = [
@@ -15,9 +15,10 @@ const quickActions = [
 interface Props {
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  onMenuToggle?: () => void;
 }
 
-export default function TopHeader({ theme, onToggleTheme }: Props) {
+export default function TopHeader({ theme, onToggleTheme, onMenuToggle }: Props) {
   const router = useRouter();
   const [user, setUser] = useState<{ fullName?: string; email?: string } | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -89,8 +90,11 @@ export default function TopHeader({ theme, onToggleTheme }: Props) {
 
   return (
     <header className="h-14 bg-surface border-b border-border flex items-center justify-between px-6 shrink-0 z-40">
-      {/* Left — empty, logo is in sidebar */}
-      <div />
+      {/* Left — hamburger on mobile */}
+      <button onClick={onMenuToggle} className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-background transition-colors text-muted hover:text-text">
+        <Menu className="w-5 h-5" />
+      </button>
+      <div className="hidden md:block" />
 
       {/* Right actions */}
       <div className="flex items-center gap-2">
