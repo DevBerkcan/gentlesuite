@@ -301,17 +301,12 @@ export default function InvoiceDetailPage() {
                 <div><label className="block text-xs text-muted mb-1">Rechnungsdatum</label><input type="date" value={form.invoiceDate} onChange={e => setForm({ ...form, invoiceDate: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg" /></div>
                 <div><label className="block text-xs text-muted mb-1">Faellig</label><input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="block text-xs text-muted mb-1">Leistung von</label><input type="date" value={form.serviceDateFrom} onChange={e => setForm({ ...form, serviceDateFrom: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg" /></div>
-                <div><label className="block text-xs text-muted mb-1">Leistung bis</label><input type="date" value={form.serviceDateTo} onChange={e => setForm({ ...form, serviceDateTo: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg" /></div>
-              </div>
             </div>
           ) : (
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted">Betreff</span><span>{invoice.subject || "—"}</span></div>
               <div className="flex justify-between"><span className="text-muted">Rechnungsdatum</span><span>{new Date(invoice.invoiceDate).toLocaleDateString("de")}</span></div>
               <div className="flex justify-between"><span className="text-muted">Faellig</span><span>{new Date(invoice.dueDate).toLocaleDateString("de")}</span></div>
-              {invoice.serviceDateFrom && <div className="flex justify-between"><span className="text-muted">Leistungszeitraum</span><span>{new Date(invoice.serviceDateFrom).toLocaleDateString("de")} – {new Date(invoice.serviceDateTo).toLocaleDateString("de")}</span></div>}
               <div className="flex justify-between"><span className="text-muted">Steuermodus</span><span>{invoiceTaxMode}</span></div>
               <div className="flex justify-between"><span className="text-muted">Mahnwesen</span><span>{reminderStop ? "Gestoppt" : "Aktiv"}</span></div>
               {invoice.isFinalized && <div className="flex justify-between"><span className="text-muted">Finalisiert</span><span>{new Date(invoice.finalizedAt).toLocaleDateString("de")}</span></div>}

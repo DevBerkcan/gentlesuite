@@ -1,12 +1,20 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const emptyLine = () => ({ title: "", description: "", quantity: 1, unitPrice: 0, vatPercent: 19, sortOrder: 0 });
 
 const statusMap: Record<string, string> = { Draft: "Entwurf", Sent: "Gesendet", Viewed: "Angesehen", Accepted: "Angenommen", Ordered: "Auftrag", Rejected: "Abgelehnt", Expired: "Abgelaufen" };
 
 export default function InvoicesPage() {
+  const emptyForm = {
+    customerId: "",
+    subject: "",
+    introText: "",
+    paymentTermDays: 14,
+    taxMode: "Standard",
+  };
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [show, setShow] = useState(false);
@@ -15,8 +23,8 @@ export default function InvoicesPage() {
   const [quotes, setQuotes] = useState<any[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [converting, setConverting] = useState<string | null>(null);
-  const [form, setForm] = useState({ customerId: "", subject: "", introText: "", serviceDateFrom: "", serviceDateTo: "", paymentTermDays: 14, taxMode: "Regular" });
-  const [lines, setLines] = useState([emptyLine()]);
+  const [form, setForm, clearForm] = useLocalStorage("draft:invoice-create", emptyForm);
+  const [lines, setLines, clearLines] = useLocalStorage("draft:invoice-lines", [emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [xmlDownloading, setXmlDownloading] = useState<string | null>(null);
@@ -53,15 +61,21 @@ export default function InvoicesPage() {
     setShow(true);
     setQuotesLoading(true);
     try {
-      const [c, q] = await Promise.all([
+      const [c, q, settings] = await Promise.all([
         api.customers("pageSize=200"),
         api.quotes("pageSize=200"),
+        api.settings(),
       ]);
       setCustomers(c.items || []);
       setQuotes((q.items || []).filter((qt: any) => !qt.hasInvoice && ["Accepted", "Ordered"].includes(qt.status)));
+      setForm({
+        ...emptyForm,
+        introText: settings?.invoiceIntroTemplate || "",
+        paymentTermDays: settings?.invoicePaymentTermDays || 14,
+        taxMode: settings?.defaultTaxMode || "Standard",
+      });
     } catch {}
     setQuotesLoading(false);
-    setForm({ customerId: "", subject: "", introText: "", serviceDateFrom: "", serviceDateTo: "", paymentTermDays: 14, taxMode: "Regular" });
     setLines([emptyLine()]);
   };
 
@@ -91,11 +105,11 @@ export default function InvoicesPage() {
     try {
       const req = {
         customerId: form.customerId, subject: form.subject || undefined, introText: form.introText || undefined,
-        serviceDateFrom: form.serviceDateFrom || new Date().toISOString(), serviceDateTo: form.serviceDateTo || new Date().toISOString(),
         paymentTermDays: form.paymentTermDays, taxMode: form.taxMode,
         lines: lines.map((l, i) => ({ ...l, sortOrder: i })),
       };
       const inv = await api.createInvoice(req);
+      clearForm(); clearLines();
       setShow(false); window.location.href = `/invoices/${inv.id}`;
     } catch (e: any) { setError(e.message); } finally { setSaving(false); }
   };
@@ -272,21 +286,13 @@ export default function InvoicesPage() {
                   <input value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted block mb-1">Leistungszeitraum von</label>
-                  <input type="date" value={form.serviceDateFrom} onChange={e => setForm({...form, serviceDateFrom: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted block mb-1">Leistungszeitraum bis</label>
-                  <input type="date" value={form.serviceDateTo} onChange={e => setForm({...form, serviceDateTo: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
-                </div>
-                <div>
                   <label className="text-xs text-muted block mb-1">Zahlungsfrist (Tage)</label>
                   <input type="number" value={form.paymentTermDays} onChange={e => setForm({...form, paymentTermDays: +e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
                 </div>
                 <div>
                   <label className="text-xs text-muted block mb-1">Steuerart</label>
                   <select value={form.taxMode} onChange={e => setForm({...form, taxMode: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
-                    <option value="Regular">Regulaer (MwSt.)</option>
+                    <option value="Standard">Standard</option>
                     <option value="SmallBusiness">Kleinunternehmer</option>
                     <option value="ReverseCharge">Reverse Charge</option>
                   </select>

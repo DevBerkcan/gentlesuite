@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const statusMap: Record<string, { label: string; cls: string }> = {
   Draft: { label: "Entwurf", cls: "bg-gray-100 text-muted" },
@@ -21,7 +22,7 @@ export default function QuotesPage() {
   const [showNew, setShowNew] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
-  const [newQuote, setNewQuote] = useState({ customerId: "", templateId: "" });
+  const [newQuote, setNewQuote, clearNewQuote] = useLocalStorage("draft:quote-create", { customerId: "", templateId: "" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -59,7 +60,7 @@ export default function QuotesPage() {
         await api.createQuote({ customerId: newQuote.customerId });
       }
       setShowNew(false);
-      setNewQuote({ customerId: "", templateId: "" });
+      clearNewQuote();
       setFieldErrors({});
       setError("");
       setSuccess("Angebot erfolgreich erstellt");

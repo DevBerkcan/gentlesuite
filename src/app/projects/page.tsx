@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const statusMap: Record<string, { label: string; cls: string }> = {
   Planning: { label: "Planung", cls: "bg-gray-100 text-gray-700" },
@@ -14,7 +15,7 @@ export default function ProjectsPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ customerId: "", name: "", description: "", startDate: "", dueDate: "", onboardingTemplateId: "" });
+  const [form, setForm, clearForm] = useLocalStorage("draft:project-create", { customerId: "", name: "", description: "", startDate: "", dueDate: "", onboardingTemplateId: "" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -55,7 +56,7 @@ export default function ProjectsPage() {
       await api.createProject(payload);
       const defaultTemplate = templates.find((t: any) => t.isDefault);
       setShowNew(false);
-      setForm({ customerId: "", name: "", description: "", startDate: "", dueDate: "", onboardingTemplateId: defaultTemplate?.id || "" });
+      clearForm();
       setFieldErrors({});
       setError("");
       setSuccess("Projekt erfolgreich angelegt");

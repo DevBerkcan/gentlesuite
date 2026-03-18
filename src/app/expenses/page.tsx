@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const defaultForm = { supplier: "", description: "", netAmount: 0, vatPercent: 19, expenseCategoryId: "", isRecurring: false, recurringInterval: "Monthly", recurringNextDate: "" };
 
@@ -8,7 +9,7 @@ export default function ExpensesPage() {
   const [data, setData] = useState<any>(null);
   const [cats, setCats] = useState<any[]>([]);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm, clearForm] = useLocalStorage("draft:expense-create", defaultForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -70,7 +71,7 @@ export default function ExpensesPage() {
     try {
       await api.createExpense(form);
       setShowNew(false);
-      setForm(defaultForm);
+      clearForm();
       setFieldErrors({});
       setError("");
       setSuccess("Ausgabe erfolgreich erfasst");

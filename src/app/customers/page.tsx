@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const STATUS_TABS = [
   { key: "", label: "Alle" },
@@ -36,7 +37,7 @@ export default function CustomersPage() {
   const [sortAsc, setSortAsc] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm, clearForm] = useLocalStorage("draft:customer-create", defaultForm);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
@@ -87,7 +88,7 @@ export default function CustomersPage() {
       const dup = await api.checkCustomerDuplicate({ companyName: form.companyName, email: form.primaryContact.email || null, phone: form.primaryContact.phone || null });
       if (dup?.hasDuplicate) { setDuplicateMatches(dup.matches || []); setError("Moegliche Dublette erkannt. Bitte vorhandenen Kunden pruefen."); return; }
       await api.createCustomer(form);
-      setShowNew(false); setForm(defaultForm); setDuplicateMatches([]); setError("");
+      setShowNew(false); clearForm(); setDuplicateMatches([]); setError("");
       setSuccess("Kunde erfolgreich angelegt"); setTimeout(() => setSuccess(""), 4000);
       load();
     } catch (e: any) { setError(e?.message || "Fehler beim Anlegen"); }

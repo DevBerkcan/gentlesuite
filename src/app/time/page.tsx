@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Trash2, Pencil } from "lucide-react";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 function startOfWeek(d: Date) {
   const day = d.getDay();
@@ -27,7 +28,7 @@ export default function TimePage() {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
 
-  const [form, setForm] = useState({
+  const [form, setForm, clearForm] = useLocalStorage("draft:time-entry", {
     projectId: "",
     customerId: "",
     description: "",
@@ -84,7 +85,7 @@ export default function TimePage() {
 
   function cancelEdit() {
     setEditId(null);
-    setForm({ projectId: "", customerId: "", description: "", hours: "", date: formatDate(today), isBillable: true, hourlyRate: "" });
+    clearForm();
   }
 
   async function handleSubmit(e: React.FormEvent) {
