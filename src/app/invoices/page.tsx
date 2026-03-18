@@ -58,7 +58,7 @@ export default function InvoicesPage() {
         api.quotes("pageSize=200"),
       ]);
       setCustomers(c.items || []);
-      setQuotes((q.items || []).filter((qt: any) => !qt.hasInvoice && qt.status !== "Rejected" && qt.status !== "Expired"));
+      setQuotes((q.items || []).filter((qt: any) => !qt.hasInvoice && ["Accepted", "Ordered"].includes(qt.status)));
     } catch {}
     setQuotesLoading(false);
     setForm({ customerId: "", subject: "", introText: "", serviceDateFrom: "", serviceDateTo: "", paymentTermDays: 14, taxMode: "Regular" });
@@ -68,6 +68,10 @@ export default function InvoicesPage() {
   const handleConvertQuote = async (quoteId: string) => {
     setConverting(quoteId);
     try {
+      const selectedQuote = quotes.find((q: any) => q.id === quoteId);
+      if (selectedQuote?.status === "Accepted") {
+        await api.markQuoteAsOrdered(quoteId);
+      }
       const inv = await api.convertQuoteToInvoice(quoteId);
       setShow(false);
       window.location.href = `/invoices/${inv.id}`;
