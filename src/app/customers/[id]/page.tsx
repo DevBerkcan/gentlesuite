@@ -309,6 +309,7 @@ export default function CustomerDetailPage() {
   ];
 
   return (
+    <>
     <div className="p-8">
       {error && <div className="bg-red-50 text-danger px-4 py-2 rounded-lg mb-4 text-sm">{error}<button onClick={() => setError("")} className="ml-2 font-bold">x</button></div>}
       {success && <div className="bg-green-50 text-success px-4 py-2 rounded-lg mb-4 text-sm">{success}</div>}
@@ -1114,5 +1115,6 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       )}
+    </>
   );
 }

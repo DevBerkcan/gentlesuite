@@ -376,7 +376,7 @@ export const api = {
   createUser: (data: any) => apiFetch<any>("/users", { method: "POST", body: JSON.stringify(data) }),
   updateUser: (id: string, data: any) => apiFetch<any>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteUser: (id: string) => apiFetch<any>(`/users/${id}`, { method: "DELETE" }),
-  resetPassword: (id: string, data: any) => apiFetch<any>(`/users/${id}/reset-password`, { method: "POST", body: JSON.stringify(data) }),
+  resetUserPassword: (id: string, data: any) => apiFetch<any>(`/users/${id}/reset-password`, { method: "POST", body: JSON.stringify(data) }),
   // Email Log
   emailLogs: (params = "") => apiFetch<any>(`/emails?${params}`),
   // Legal Texts

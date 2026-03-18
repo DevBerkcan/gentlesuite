@@ -32,6 +32,21 @@ export default function ReportsPage() {
 
   const fmt = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 
+  const exportCsv = () => {
+    const rows = ["Monat;Umsatz (EUR);Ausgaben (EUR);Ergebnis (EUR)"];
+    monthly.forEach((m: any) => {
+      const result = m.revenue - m.expenses;
+      rows.push(`${MONTHS[m.month - 1]} ${year};${m.revenue.toFixed(2)};${m.expenses.toFixed(2)};${result.toFixed(2)}`);
+    });
+    rows.push("");
+    rows.push(`Gesamt;${totalRevenue.toFixed(2)};${totalExpenses.toFixed(2)};${(totalRevenue - totalExpenses).toFixed(2)}`);
+    const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `Bericht_${year}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -39,15 +54,20 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold">Berichte</h1>
           <p className="text-muted text-sm mt-1">Umsatz, Ausgaben und Kundenprofitabilität</p>
         </div>
-        <select
-          value={year}
-          onChange={e => setYear(Number(e.target.value))}
-          className="border border-border rounded-lg px-3 py-2 bg-surface text-sm"
-        >
-          {[currentYear, currentYear - 1, currentYear - 2].map(y => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <select
+            value={year}
+            onChange={e => setYear(Number(e.target.value))}
+            className="border border-border rounded-lg px-3 py-2 bg-surface text-sm"
+          >
+            {[currentYear, currentYear - 1, currentYear - 2].map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          {!loading && monthly.length > 0 && (
+            <button onClick={exportCsv} className="text-xs px-3 py-2 border border-border rounded-lg hover:bg-background">↓ CSV-Export</button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}

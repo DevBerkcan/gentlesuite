@@ -34,7 +34,7 @@ export default function UsersPage() {
 
   const resetPw = async () => {
     if (!pwId || !newPw) return;
-    try { await api.resetPassword(pwId, { newPassword: newPw }); setPwId(null); setNewPw(""); setSuccess("Passwort zurueckgesetzt"); setTimeout(() => setSuccess(""), 3000); } catch (e: any) { setError(e.message); }
+    try { await api.resetUserPassword(pwId, { newPassword: newPw }); setPwId(null); setNewPw(""); setSuccess("Passwort zurueckgesetzt"); setTimeout(() => setSuccess(""), 3000); } catch (e: any) { setError(e.message); }
   };
 
   const deactivate = async (id: string) => {

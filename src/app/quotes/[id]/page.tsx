@@ -240,7 +240,7 @@ export default function QuoteDetailPage() {
           {isCurrentVersion && !editing && <button onClick={handleCreateNewVersion} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background">Neue Version</button>}
           {(quoteStatus === "Draft" || quoteStatus === "Sent") && <button onClick={() => { setSendForm({ ...sendForm, recipientEmail: quote.primaryContactEmail || "" }); setShowSend(true); }} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium">Versenden</button>}
           {quoteStatus === "Accepted" && <button onClick={handleMarkAsOrdered} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium">Auftrag bestätigen</button>}
-          {quoteStatus === "Ordered" && <button onClick={handleConvert} className="px-4 py-2 bg-success text-white rounded-lg text-sm font-medium">Zur Rechnung</button>}
+          {!["Rejected", "Expired"].includes(quoteStatus) && <button onClick={handleConvert} className="px-4 py-2 bg-success text-white rounded-lg text-sm font-medium">→ Zur Rechnung</button>}
           {quoteStatus === "Draft" && <button onClick={handleDelete} className="px-4 py-2 text-danger border border-danger/30 rounded-lg text-sm font-medium hover:bg-red-50">Loeschen</button>}
         </div>
       </div>

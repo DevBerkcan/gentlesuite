@@ -4,11 +4,17 @@ import { api } from "@/lib/api";
 
 const emptyLine = () => ({ title: "", description: "", quantity: 1, unitPrice: 0, vatPercent: 19, sortOrder: 0 });
 
+const statusMap: Record<string, string> = { Draft: "Entwurf", Sent: "Gesendet", Viewed: "Angesehen", Accepted: "Angenommen", Ordered: "Auftrag", Rejected: "Abgelehnt", Expired: "Abgelaufen" };
+
 export default function InvoicesPage() {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [show, setShow] = useState(false);
+  const [modalTab, setModalTab] = useState<"quote" | "blank">("quote");
   const [customers, setCustomers] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<any[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [converting, setConverting] = useState<string | null>(null);
   const [form, setForm] = useState({ customerId: "", subject: "", introText: "", serviceDateFrom: "", serviceDateTo: "", paymentTermDays: 14, taxMode: "Regular" });
   const [lines, setLines] = useState([emptyLine()]);
   const [saving, setSaving] = useState(false);
@@ -43,9 +49,30 @@ export default function InvoicesPage() {
   };
 
   const openModal = async () => {
-    try { const c = await api.customers("pageSize=200"); setCustomers(c.items || []); } catch {}
+    setModalTab("quote");
+    setShow(true);
+    setQuotesLoading(true);
+    try {
+      const [c, q] = await Promise.all([
+        api.customers("pageSize=200"),
+        api.quotes("pageSize=200"),
+      ]);
+      setCustomers(c.items || []);
+      setQuotes((q.items || []).filter((qt: any) => !qt.hasInvoice && qt.status !== "Rejected" && qt.status !== "Expired"));
+    } catch {}
+    setQuotesLoading(false);
     setForm({ customerId: "", subject: "", introText: "", serviceDateFrom: "", serviceDateTo: "", paymentTermDays: 14, taxMode: "Regular" });
-    setLines([emptyLine()]); setShow(true);
+    setLines([emptyLine()]);
+  };
+
+  const handleConvertQuote = async (quoteId: string) => {
+    setConverting(quoteId);
+    try {
+      const inv = await api.convertQuoteToInvoice(quoteId);
+      setShow(false);
+      window.location.href = `/invoices/${inv.id}`;
+    } catch (e: any) { setError(e.message || "Fehler beim Umwandeln."); }
+    finally { setConverting(null); }
   };
 
   const updateLine = (idx: number, field: string, val: any) => { const l = [...lines]; (l[idx] as any)[field] = val; setLines(l); };
@@ -75,14 +102,14 @@ export default function InvoicesPage() {
   const handleBulkFinalize = async () => {
     if (!selected.size || !confirm(`${selected.size} Rechnungen finalisieren?`)) return;
     setBulkBusy(true);
-    try { await api.bulkFinalizeInvoices([...selected]); setSelected(new Set()); setSuccess(`${selected.size} Rechnungen finalisiert.`); setTimeout(() => setSuccess(""), 4000); load(statusFilter, page); }
+    try { await api.bulkFinalizeInvoices(Array.from(selected)); setSelected(new Set()); setSuccess(`${selected.size} Rechnungen finalisiert.`); setTimeout(() => setSuccess(""), 4000); load(statusFilter, page); }
     catch { setError("Fehler beim Finalisieren."); } finally { setBulkBusy(false); }
   };
 
   const handleBulkSend = async () => {
     if (!selected.size || !confirm(`${selected.size} Rechnungen per E-Mail senden?`)) return;
     setBulkBusy(true);
-    try { await api.bulkSendInvoices([...selected]); setSelected(new Set()); setSuccess(`${selected.size} Rechnungen gesendet.`); setTimeout(() => setSuccess(""), 4000); load(statusFilter, page); }
+    try { await api.bulkSendInvoices(Array.from(selected)); setSelected(new Set()); setSuccess(`${selected.size} Rechnungen gesendet.`); setTimeout(() => setSuccess(""), 4000); load(statusFilter, page); }
     catch { setError("Fehler beim Senden."); } finally { setBulkBusy(false); }
   };
 
@@ -170,79 +197,138 @@ export default function InvoicesPage() {
 
       {show && <div className="fixed inset-0 bg-black/40 flex items-start justify-center pt-10 z-50 overflow-auto">
         <div className="bg-surface rounded-xl border border-border p-6 w-full max-w-3xl shadow-xl mb-10">
-          <h2 className="text-lg font-bold mb-4">Neue Rechnung erstellen</h2>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-xs text-muted block mb-1">Kunde *</label>
-              <select value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
-                <option value="">Bitte waehlen...</option>
-                {customers.map((c: any) => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted block mb-1">Betreff</label>
-              <input value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
-            </div>
-            <div>
-              <label className="text-xs text-muted block mb-1">Leistungszeitraum von</label>
-              <input type="date" value={form.serviceDateFrom} onChange={e => setForm({...form, serviceDateFrom: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
-            </div>
-            <div>
-              <label className="text-xs text-muted block mb-1">Leistungszeitraum bis</label>
-              <input type="date" value={form.serviceDateTo} onChange={e => setForm({...form, serviceDateTo: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
-            </div>
-            <div>
-              <label className="text-xs text-muted block mb-1">Zahlungsfrist (Tage)</label>
-              <input type="number" value={form.paymentTermDays} onChange={e => setForm({...form, paymentTermDays: +e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
-            </div>
-            <div>
-              <label className="text-xs text-muted block mb-1">Steuerart</label>
-              <select value={form.taxMode} onChange={e => setForm({...form, taxMode: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
-                <option value="Regular">Regulaer (MwSt.)</option>
-                <option value="SmallBusiness">Kleinunternehmer</option>
-                <option value="ReverseCharge">Reverse Charge</option>
-              </select>
-            </div>
-          </div>
-          <div className="mb-2">
-            <label className="text-xs text-muted block mb-1">Einleitungstext</label>
-            <textarea rows={2} value={form.introText} onChange={e => setForm({...form, introText: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold">Neue Rechnung erstellen</h2>
+            <button onClick={() => setShow(false)} className="text-muted hover:text-text text-xl leading-none">×</button>
           </div>
 
-          <h3 className="font-semibold text-sm mt-4 mb-2">Positionen</h3>
-          <div className="space-y-2">
-            {lines.map((l, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-4">
-                  {idx === 0 && <label className="text-xs text-muted">Titel</label>}
-                  <input value={l.title} onChange={e => updateLine(idx, "title", e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" placeholder="Titel" />
+          {/* Tabs */}
+          <div className="flex gap-1 mb-5 bg-background rounded-lg p-1 border border-border">
+            <button onClick={() => setModalTab("quote")} className={`flex-1 py-2 text-sm rounded-md font-medium transition-colors ${modalTab === "quote" ? "bg-surface shadow-sm text-text" : "text-muted hover:text-text"}`}>
+              Aus Angebot übernehmen
+            </button>
+            <button onClick={() => setModalTab("blank")} className={`flex-1 py-2 text-sm rounded-md font-medium transition-colors ${modalTab === "blank" ? "bg-surface shadow-sm text-text" : "text-muted hover:text-text"}`}>
+              Neue leere Rechnung
+            </button>
+          </div>
+
+          {/* Tab: Aus Angebot */}
+          {modalTab === "quote" && (
+            <div>
+              {quotesLoading ? (
+                <div className="py-10 text-center text-muted text-sm">Angebote werden geladen...</div>
+              ) : quotes.length === 0 ? (
+                <div className="py-10 text-center text-muted text-sm">
+                  <p className="font-medium mb-1">Keine offenen Angebote</p>
+                  <p className="text-xs">Alle Angebote wurden bereits in Rechnungen umgewandelt, oder es gibt noch keine Angebote.</p>
+                  <button onClick={() => setModalTab("blank")} className="mt-4 text-primary text-sm hover:underline">→ Leere Rechnung erstellen</button>
                 </div>
-                <div className="col-span-2">
-                  {idx === 0 && <label className="text-xs text-muted">Menge</label>}
-                  <input type="number" step="0.01" value={l.quantity} onChange={e => updateLine(idx, "quantity", +e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" />
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted mb-3">{quotes.length} Angebot{quotes.length !== 1 ? "e" : ""} ohne Rechnung — Klicken um direkt zu übernehmen</p>
+                  {quotes.map((q: any) => (
+                    <div key={q.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium text-sm">{q.quoteNumber}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-background border border-border text-muted">{statusMap[q.status] ?? q.status}</span>
+                        </div>
+                        <div className="text-sm text-muted mt-0.5">{q.customerName}{q.subject ? <span className="ml-2">· {q.subject}</span> : null}</div>
+                      </div>
+                      <div className="flex items-center gap-4 ml-4 shrink-0">
+                        <span className="text-sm font-semibold">{q.grandTotal?.toFixed(2)} €</span>
+                        <button
+                          onClick={() => handleConvertQuote(q.id)}
+                          disabled={converting === q.id}
+                          className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {converting === q.id ? "…" : "→ Zu Rechnung"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="col-span-2">
-                  {idx === 0 && <label className="text-xs text-muted">Preis</label>}
-                  <input type="number" step="0.01" value={l.unitPrice} onChange={e => updateLine(idx, "unitPrice", +e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" />
+              )}
+            </div>
+          )}
+
+          {/* Tab: Neue leere Rechnung */}
+          {modalTab === "blank" && (
+            <>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="text-xs text-muted block mb-1">Kunde *</label>
+                  <select value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
+                    <option value="">Bitte waehlen...</option>
+                    {customers.map((c: any) => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+                  </select>
                 </div>
-                <div className="col-span-2">
-                  {idx === 0 && <label className="text-xs text-muted">MwSt %</label>}
-                  <input type="number" value={l.vatPercent} onChange={e => updateLine(idx, "vatPercent", +e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" />
+                <div>
+                  <label className="text-xs text-muted block mb-1">Betreff</label>
+                  <input value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
                 </div>
-                <div className="col-span-1 text-right text-sm font-medium pt-1">{(l.quantity * l.unitPrice).toFixed(2)}</div>
-                <div className="col-span-1"><button onClick={() => removeLine(idx)} className="text-danger text-sm hover:underline">x</button></div>
+                <div>
+                  <label className="text-xs text-muted block mb-1">Leistungszeitraum von</label>
+                  <input type="date" value={form.serviceDateFrom} onChange={e => setForm({...form, serviceDateFrom: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted block mb-1">Leistungszeitraum bis</label>
+                  <input type="date" value={form.serviceDateTo} onChange={e => setForm({...form, serviceDateTo: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted block mb-1">Zahlungsfrist (Tage)</label>
+                  <input type="number" value={form.paymentTermDays} onChange={e => setForm({...form, paymentTermDays: +e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted block mb-1">Steuerart</label>
+                  <select value={form.taxMode} onChange={e => setForm({...form, taxMode: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
+                    <option value="Regular">Regulaer (MwSt.)</option>
+                    <option value="SmallBusiness">Kleinunternehmer</option>
+                    <option value="ReverseCharge">Reverse Charge</option>
+                  </select>
+                </div>
               </div>
-            ))}
-          </div>
-          <button onClick={addLine} className="text-primary text-sm mt-2 hover:underline">+ Position</button>
+              <div className="mb-2">
+                <label className="text-xs text-muted block mb-1">Einleitungstext</label>
+                <textarea rows={2} value={form.introText} onChange={e => setForm({...form, introText: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+              </div>
 
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-border">
-            <div className="text-sm text-muted">Netto: {netTotal.toFixed(2)} EUR | Brutto: {grossTotal.toFixed(2)} EUR</div>
-            <div className="flex gap-2">
-              <button onClick={() => setShow(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-background">Abbrechen</button>
-              <button onClick={save} disabled={saving || !form.customerId} className="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{saving ? "Speichern..." : "Rechnung erstellen"}</button>
-            </div>
-          </div>
+              <h3 className="font-semibold text-sm mt-4 mb-2">Positionen</h3>
+              <div className="space-y-2">
+                {lines.map((l, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4">
+                      {idx === 0 && <label className="text-xs text-muted">Titel</label>}
+                      <input value={l.title} onChange={e => updateLine(idx, "title", e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" placeholder="Titel" />
+                    </div>
+                    <div className="col-span-2">
+                      {idx === 0 && <label className="text-xs text-muted">Menge</label>}
+                      <input type="number" step="0.01" value={l.quantity} onChange={e => updateLine(idx, "quantity", +e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" />
+                    </div>
+                    <div className="col-span-2">
+                      {idx === 0 && <label className="text-xs text-muted">Preis</label>}
+                      <input type="number" step="0.01" value={l.unitPrice} onChange={e => updateLine(idx, "unitPrice", +e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" />
+                    </div>
+                    <div className="col-span-2">
+                      {idx === 0 && <label className="text-xs text-muted">MwSt %</label>}
+                      <input type="number" value={l.vatPercent} onChange={e => updateLine(idx, "vatPercent", +e.target.value)} className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background" />
+                    </div>
+                    <div className="col-span-1 text-right text-sm font-medium pt-1">{(l.quantity * l.unitPrice).toFixed(2)}</div>
+                    <div className="col-span-1"><button onClick={() => removeLine(idx)} className="text-danger text-sm hover:underline">x</button></div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={addLine} className="text-primary text-sm mt-2 hover:underline">+ Position</button>
+
+              <div className="flex justify-between items-center mt-4 pt-4 border-t border-border">
+                <div className="text-sm text-muted">Netto: {netTotal.toFixed(2)} EUR | Brutto: {grossTotal.toFixed(2)} EUR</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShow(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-background">Abbrechen</button>
+                  <button onClick={save} disabled={saving || !form.customerId} className="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50">{saving ? "Speichern..." : "Rechnung erstellen"}</button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>}
     </div>
