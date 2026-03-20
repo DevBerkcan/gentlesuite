@@ -34,6 +34,22 @@ body {
   color: rgb(var(--color-text));
 }
 
+select {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+}
+
+select option {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+}
+
+select optgroup {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-muted));
+}
+
+
 /* Mobile: make all tables scrollable horizontally */
 @media (max-width: 768px) {
   .overflow-hidden table,
