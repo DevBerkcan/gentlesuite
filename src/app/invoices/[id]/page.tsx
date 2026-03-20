@@ -46,6 +46,16 @@ export default function InvoiceDetailPage() {
   const [reminderStop, setReminderStop] = useState(false);
   const [xmlDownloading, setXmlDownloading] = useState(false);
 
+async function handlePdfDownload() {
+  try {
+    const blob = await api.invoicePdfBlob(id);
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch { setError("PDF konnte nicht geladen werden"); }
+}
+
+
   useEffect(() => {
     if (!id) return;
     loadInvoice();
@@ -257,11 +267,11 @@ export default function InvoiceDetailPage() {
           <p className="text-sm text-muted">{invoice.customerName}</p>
         </div>
         <div className="flex gap-2">
-          <a href={api.invoicePdf(id)} target="_blank" className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background">PDF</a>
           {invoiceStatus !== "Draft" && (
-            <button onClick={handleXmlDownload} disabled={xmlDownloading} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background disabled:opacity-50">
-              {xmlDownloading ? "…" : "XRechnung"}
-            </button>
+<button onClick={handlePdfDownload} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background">
+  PDF
+</button>
+
           )}
           <button onClick={handleToggleReminderStop} className={`px-4 py-2 border rounded-lg text-sm font-medium ${reminderStop ? "border-warning text-warning hover:bg-yellow-50" : "border-border hover:bg-background"}`}>
             {reminderStop ? "Mahnstopp aktiv" : "Mahnstopp"}
