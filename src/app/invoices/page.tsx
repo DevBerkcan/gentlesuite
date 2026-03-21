@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useParams } from "next/navigation";
 
 const emptyLine = () => ({ title: "", description: "", quantity: 1, unitPrice: 0, vatPercent: 19, sortOrder: 0 });
 
@@ -34,7 +35,8 @@ export default function InvoicesPage() {
   const pageSize = 20;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
-
+  const { id } = useParams<{ id: string }>();
+  
   const load = (status = "", p = 1) => {
     const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
     if (status) params.set("status", status);
@@ -55,6 +57,16 @@ export default function InvoicesPage() {
     } catch { setError("XRechnung-Export fehlgeschlagen."); }
     finally { setXmlDownloading(null); }
   };
+
+const handlePdfDownload = async (invoiceId: string, e: React.MouseEvent) => {
+  e.stopPropagation();
+  try {
+    const blob = await api.invoicePdfBlob(invoiceId);
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch { setError("PDF konnte nicht geladen werden"); }
+};
 
   const openModal = async () => {
     setModalTab("quote");
@@ -185,7 +197,7 @@ export default function InvoicesPage() {
               <td className="px-4 py-3 text-right font-medium">{i.grossTotal?.toFixed(2)} EUR</td>
               <td className="px-4 py-3 text-sm text-muted">{new Date(i.dueDate).toLocaleDateString("de")}</td>
               <td className="px-4 py-3 flex items-center gap-3">
-                <a href={api.invoicePdf(i.id)} target="_blank" className="text-primary text-sm hover:underline" onClick={e => e.stopPropagation()}>PDF</a>
+<button onClick={e => handlePdfDownload(i.id, e)} className="text-primary text-sm hover:underline">PDF</button>
                 {i.status !== "Draft" && (
                   <button onClick={e => handleXmlDownload(i.id, i.invoiceNumber, e)} disabled={xmlDownloading === i.id} className="text-sm text-muted hover:text-text disabled:opacity-50">
                     {xmlDownloading === i.id ? "…" : "XML"}
