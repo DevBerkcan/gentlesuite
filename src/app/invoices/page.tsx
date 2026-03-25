@@ -36,7 +36,7 @@ export default function InvoicesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const { id } = useParams<{ id: string }>();
-  
+
   const load = (status = "", p = 1) => {
     const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
     if (status) params.set("status", status);
@@ -58,15 +58,15 @@ export default function InvoicesPage() {
     finally { setXmlDownloading(null); }
   };
 
-const handlePdfDownload = async (invoiceId: string, e: React.MouseEvent) => {
-  e.stopPropagation();
-  try {
-    const blob = await api.invoicePdfBlob(invoiceId);
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  } catch { setError("PDF konnte nicht geladen werden"); }
-};
+  const handlePdfDownload = async (invoiceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const blob = await api.invoicePdfBlob(invoiceId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch { setError("PDF konnte nicht geladen werden"); }
+  };
 
   const openModal = async () => {
     setModalTab("quote");
@@ -86,7 +86,7 @@ const handlePdfDownload = async (invoiceId: string, e: React.MouseEvent) => {
         paymentTermDays: settings?.invoicePaymentTermDays || 14,
         taxMode: settings?.defaultTaxMode || "Standard",
       });
-    } catch {}
+    } catch { }
     setQuotesLoading(false);
     setLines([emptyLine()]);
   };
@@ -190,14 +190,14 @@ const handlePdfDownload = async (invoiceId: string, e: React.MouseEvent) => {
           <thead><tr className="border-b border-border bg-background"><th className="px-4 py-3 w-8"><input type="checkbox" onChange={toggleAll} checked={!!data?.items?.length && selected.size === data.items.length} className="accent-primary" /></th><th className="px-4 py-3 text-left text-xs text-muted">Nr.</th><th className="px-4 py-3 text-left text-xs text-muted">Kunde</th><th className="px-4 py-3 text-left text-xs text-muted">Status</th><th className="px-4 py-3 text-right text-xs text-muted">Brutto</th><th className="px-4 py-3 text-left text-xs text-muted">Faellig</th><th className="px-4 py-3 text-left text-xs text-muted">Dokumente</th></tr></thead>
           <tbody>{data?.items?.map((i: any) => (
             <tr key={i.id} className={`border-b border-border hover:bg-background cursor-pointer ${selected.has(i.id) ? "bg-primary/5" : ""}`} onClick={() => window.location.href = `/invoices/${i.id}`}>
-              <td className="px-4 py-3 w-8" onClick={e => { e.stopPropagation(); toggleSelect(i.id); }}><input type="checkbox" checked={selected.has(i.id)} onChange={() => {}} className="accent-primary" /></td>
+              <td className="px-4 py-3 w-8" onClick={e => { e.stopPropagation(); toggleSelect(i.id); }}><input type="checkbox" checked={selected.has(i.id)} onChange={() => { }} className="accent-primary" /></td>
               <td className="px-4 py-3 font-medium">{i.invoiceNumber}</td>
               <td className="px-4 py-3">{i.customerName}</td>
               <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full ${i.status === "Paid" ? "bg-green-50 text-success" : i.status === "Overdue" ? "bg-red-50 text-danger" : "bg-yellow-50 text-warning"}`}>{i.status}</span></td>
               <td className="px-4 py-3 text-right font-medium">{i.grossTotal?.toFixed(2)} EUR</td>
               <td className="px-4 py-3 text-sm text-muted">{new Date(i.dueDate).toLocaleDateString("de")}</td>
               <td className="px-4 py-3 flex items-center gap-3">
-<button onClick={e => handlePdfDownload(i.id, e)} className="text-primary text-sm hover:underline">PDF</button>
+                <button onClick={e => handlePdfDownload(i.id, e)} className="text-primary text-sm hover:underline">PDF</button>
                 {i.status !== "Draft" && (
                   <button onClick={e => handleXmlDownload(i.id, i.invoiceNumber, e)} disabled={xmlDownloading === i.id} className="text-sm text-muted hover:text-text disabled:opacity-50">
                     {xmlDownloading === i.id ? "…" : "XML"}
@@ -288,22 +288,22 @@ const handlePdfDownload = async (invoiceId: string, e: React.MouseEvent) => {
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="text-xs text-muted block mb-1">Kunde *</label>
-                  <select value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
+                  <select value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
                     <option value="">Bitte waehlen...</option>
                     {customers.map((c: any) => <option key={c.id} value={c.id}>{c.companyName}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-xs text-muted block mb-1">Betreff</label>
-                  <input value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+                  <input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
                 </div>
                 <div>
                   <label className="text-xs text-muted block mb-1">Zahlungsfrist (Tage)</label>
-                  <input type="number" value={form.paymentTermDays} onChange={e => setForm({...form, paymentTermDays: +e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+                  <input type="number" value={form.paymentTermDays} onChange={e => setForm({ ...form, paymentTermDays: +e.target.value })} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
                 </div>
                 <div>
                   <label className="text-xs text-muted block mb-1">Steuerart</label>
-                  <select value={form.taxMode} onChange={e => setForm({...form, taxMode: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
+                  <select value={form.taxMode} onChange={e => setForm({ ...form, taxMode: e.target.value })} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background">
                     <option value="Standard">Standard</option>
                     <option value="SmallBusiness">Kleinunternehmer</option>
                     <option value="ReverseCharge">Reverse Charge</option>
@@ -312,7 +312,7 @@ const handlePdfDownload = async (invoiceId: string, e: React.MouseEvent) => {
               </div>
               <div className="mb-2">
                 <label className="text-xs text-muted block mb-1">Einleitungstext</label>
-                <textarea rows={2} value={form.introText} onChange={e => setForm({...form, introText: e.target.value})} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
+                <textarea rows={2} value={form.introText} onChange={e => setForm({ ...form, introText: e.target.value })} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background" />
               </div>
 
               <h3 className="font-semibold text-sm mt-4 mb-2">Positionen</h3>

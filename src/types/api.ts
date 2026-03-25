@@ -149,6 +149,8 @@ export interface QuoteDetail {
   introText?: string | null;
   outroText?: string | null;
   notes?: string | null;
+  internalNotes?: string | null;
+  customerComment?: string | null;
   taxRate: number;
   taxMode: TaxMode;
   subtotalOneTime: number;
@@ -156,10 +158,18 @@ export interface QuoteDetail {
   subtotal: number;
   taxAmount: number;
   grandTotal: number;
+  sentAt?: string | null;
+  expiresAt?: string | null;
   signatureStatus: SignatureStatus;
+  signatureData?: string | null;
+  signedByName?: string | null;
+  signedByEmail?: string | null;
+  signedAt?: string | null;
   primaryContactEmail?: string | null;
   lines: QuoteLine[];
+  legalTextBlockKeys?: string[] | null;
 }
+
 
 export interface QuoteVersion {
   id: Id;
