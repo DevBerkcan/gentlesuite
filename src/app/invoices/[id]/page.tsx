@@ -267,12 +267,9 @@ async function handlePdfDownload() {
           <p className="text-sm text-muted">{invoice.customerName}</p>
         </div>
         <div className="flex gap-2">
-          {invoiceStatus !== "Draft" && (
 <button onClick={handlePdfDownload} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background">
-  PDF
+  {invoiceStatus === "Draft" ? "Vorschau PDF" : "PDF"}
 </button>
-
-          )}
           <button onClick={handleToggleReminderStop} className={`px-4 py-2 border rounded-lg text-sm font-medium ${reminderStop ? "border-warning text-warning hover:bg-yellow-50" : "border-border hover:bg-background"}`}>
             {reminderStop ? "Mahnstopp aktiv" : "Mahnstopp"}
           </button>
@@ -286,7 +283,7 @@ async function handlePdfDownload() {
               ) : (
                 <button onClick={() => setEditing(true)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-background">Bearbeiten</button>
               )}
-              <button onClick={handleFinalize} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium" disabled={editing && hasUnsavedChanges}>Finalisieren</button>
+              <button onClick={handleFinalize} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium" disabled={editing && hasUnsavedChanges}>Senden</button>
             </>
           )}
           {(invoiceStatus === "Final" || invoiceStatus === "Open" || invoiceStatus === "Overdue") && (
