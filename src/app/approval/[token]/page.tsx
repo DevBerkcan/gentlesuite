@@ -12,9 +12,6 @@ export default function ApprovalPage() {
   const [expired, setExpired] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfPage, setPdfPage] = useState(1);
-  const [sigName, setSigName] = useState("");
-  const [sigMode, setSigMode] = useState<"draw" | "type">("draw");
-  const [typedSig, setTypedSig] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [declined, setDeclined] = useState(false);
@@ -22,6 +19,7 @@ export default function ApprovalPage() {
   const [downloading, setDownloading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
+  const lastPos = useRef<{ x: number; y: number } | null>(null);
   const signRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,57 +40,78 @@ export default function ApprovalPage() {
   }, [token]);
 
   useEffect(() => {
-    if (sigMode !== "draw") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, [sigMode]);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      const rect = canvas.getBoundingClientRect();
+      const ctx = canvas.getContext("2d")!;
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.putImageData(imageData, 0, 0);
+    });
+
+    resizeObserver.observe(canvas);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   function getPos(
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
     canvas: HTMLCanvasElement
   ) {
     const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     if ("touches" in e) {
       return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top,
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY,
       };
     }
     return {
-      x: (e as React.MouseEvent).clientX - rect.left,
-      y: (e as React.MouseEvent).clientY - rect.top,
+      x: ((e as React.MouseEvent).clientX - rect.left) * scaleX,
+      y: ((e as React.MouseEvent).clientY - rect.top) * scaleY,
     };
   }
 
-async function downloadSignedPdf() {
-  if (!quote) return;
-  setDownloading(true);
-  try {
-    const blob = await api.approvalPdfBlob(token);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Angebot-${quote.quoteNumber}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  } catch {
-    alert("PDF konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.");
-  } finally {
-    setDownloading(false);
+  async function downloadSignedPdf() {
+    if (!quote) return;
+    setDownloading(true);
+    try {
+      const blob = await api.approvalPdfBlob(token);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Angebot-${quote.quoteNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("PDF konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.");
+    } finally {
+      setDownloading(false);
+    }
   }
-}
-
 
   function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
     isDrawing.current = true;
     const canvas = canvasRef.current!;
-    const ctx = canvas.getContext("2d")!;
     const pos = getPos(e, canvas);
+    lastPos.current = pos;
+    const ctx = canvas.getContext("2d")!;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
   }
@@ -104,14 +123,17 @@ async function downloadSignedPdf() {
     const ctx = canvas.getContext("2d")!;
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.strokeStyle = "#1e293b";
     const pos = getPos(e, canvas);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
+    lastPos.current = pos;
   }
 
   function stopDraw() {
     isDrawing.current = false;
+    lastPos.current = null;
   }
 
   function clearCanvas() {
@@ -122,32 +144,15 @@ async function downloadSignedPdf() {
   }
 
   function getSignatureDataUrl(): string | null {
-    if (sigMode === "draw") {
-      const canvas = canvasRef.current!;
-      const ctx = canvas.getContext("2d")!;
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      const hasContent = Array.from(data).some((v, i) => i % 4 !== 3 && v < 250);
-      if (!hasContent) return null;
-      return canvas.toDataURL("image/png");
-    }
-    if (!typedSig.trim()) return null;
-    const offscreen = document.createElement("canvas");
-    offscreen.width = 400;
-    offscreen.height = 100;
-    const ctx = offscreen.getContext("2d")!;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, offscreen.width, offscreen.height);
-    ctx.font = "italic 36px Georgia, serif";
-    ctx.fillStyle = "#1e293b";
-    ctx.fillText(typedSig, 20, 65);
-    return offscreen.toDataURL("image/png");
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const hasContent = Array.from(data).some((v, i) => i % 4 !== 3 && v < 250);
+    if (!hasContent) return null;
+    return canvas.toDataURL("image/png");
   }
 
   async function handleSign() {
-    if (!sigName.trim()) {
-      alert("Bitte geben Sie Ihren Namen ein.");
-      return;
-    }
     const sigData = getSignatureDataUrl();
     if (!sigData) {
       alert("Bitte unterschreiben Sie im Feld.");
@@ -158,7 +163,7 @@ async function downloadSignedPdf() {
       await api.processApproval(token, {
         accepted: true,
         signatureData: sigData,
-        signedByName: sigName,
+        signedByName: quote?.customerName ?? "",
         signedByEmail: quote?.primaryContactEmail ?? "",
         comment: "",
       });
@@ -228,19 +233,8 @@ async function downloadSignedPdf() {
               </>
             ) : (
               <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"
-                  />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                 </svg>
                 Angebot als PDF herunterladen
               </>
@@ -263,12 +257,6 @@ async function downloadSignedPdf() {
       </div>
     );
   }
-
-  const today = new Date().toLocaleDateString("de-DE", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 
   return (
     <div className="min-h-screen bg-[#1a1f2e] text-white">
@@ -301,19 +289,9 @@ async function downloadSignedPdf() {
             <div className="bg-[#252b3b] flex items-center justify-between px-4 py-2 text-sm text-slate-300">
               <span>PDF-Ansicht</span>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setPdfPage((p) => Math.max(1, p - 1))}
-                  className="hover:text-white px-1"
-                >
-                  ‹
-                </button>
+                <button onClick={() => setPdfPage((p) => Math.max(1, p - 1))} className="hover:text-white px-1">‹</button>
                 <span>{pdfPage}</span>
-                <button
-                  onClick={() => setPdfPage((p) => p + 1)}
-                  className="hover:text-white px-1"
-                >
-                  ›
-                </button>
+                <button onClick={() => setPdfPage((p) => p + 1)} className="hover:text-white px-1">›</button>
                 <a
                   href={pdfUrl}
                   download={`Angebot-${quote?.quoteNumber ?? ""}.pdf`}
@@ -337,91 +315,46 @@ async function downloadSignedPdf() {
 
         <div ref={signRef} className="bg-[#252b3b] rounded-xl p-6 border border-slate-700">
 
-          <div className="mb-5">
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Ihr Name <span className="text-indigo-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={sigName}
-              onChange={(e) => setSigName(e.target.value)}
-              placeholder={quote?.customerName ?? "Vor- und Nachname, Unternehmen"}
-              className="w-full bg-[#1a1f2e] border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
-            />
-          </div>
+          {quote?.customerName && (
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Unterzeichner
+              </label>
+              <div className="w-full bg-[#1a1f2e] border border-slate-700 rounded-lg px-4 py-2.5 text-slate-400 text-sm select-none">
+                {quote.customerName}
+              </div>
+            </div>
+          )}
 
           <div className="mb-2">
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Pad für neue Unterschrift
+              Unterschrift
             </label>
           </div>
 
-          <div className="relative border border-indigo-500 rounded-lg overflow-hidden bg-white mb-3">
+          <div className="relative rounded-lg overflow-hidden bg-white mb-4" style={{ touchAction: "none" }}>
             <button
               onClick={clearCanvas}
-              className="absolute top-2 right-2 z-10 text-slate-400 hover:text-slate-600 text-lg leading-none"
+              className="absolute top-2 right-2 z-10 text-slate-400 hover:text-slate-600 text-lg leading-none bg-white rounded-full w-7 h-7 flex items-center justify-center shadow-sm"
               title="Zurücksetzen"
               type="button"
             >
               ↺
             </button>
-
-            {sigMode === "draw" ? (
-              <>
-                <div className="absolute top-3 left-4 text-slate-400 text-xs pointer-events-none select-none">
-                  {today}
-                </div>
-                <canvas
-                  ref={canvasRef}
-                  width={560}
-                  height={160}
-                  className="w-full cursor-crosshair touch-none block"
-                  onMouseDown={startDraw}
-                  onMouseMove={draw}
-                  onMouseUp={stopDraw}
-                  onMouseLeave={stopDraw}
-                  onTouchStart={startDraw}
-                  onTouchMove={draw}
-                  onTouchEnd={stopDraw}
-                />
-              </>
-            ) : (
-              <div className="p-4 h-40 flex items-end">
-                <input
-                  type="text"
-                  value={typedSig}
-                  onChange={(e) => setTypedSig(e.target.value)}
-                  placeholder="Hier tippen…"
-                  className="w-full border-b border-slate-300 bg-transparent text-slate-800 text-2xl italic focus:outline-none pb-1"
-                  style={{ fontFamily: "Georgia, serif" }}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-2 mb-6">
-            <button
-              type="button"
-              onClick={() => setSigMode("draw")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                sigMode === "draw"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-[#1a1f2e] text-slate-400 hover:text-white border border-slate-600"
-              }`}
-            >
-              ✏️
-            </button>
-            <button
-              type="button"
-              onClick={() => setSigMode("type")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                sigMode === "type"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-[#1a1f2e] text-slate-400 hover:text-white border border-slate-600"
-              }`}
-            >
-              T
-            </button>
+            <canvas
+              ref={canvasRef}
+              width={560}
+              height={180}
+              className="w-full block cursor-crosshair"
+              style={{ touchAction: "none", display: "block" }}
+              onMouseDown={startDraw}
+              onMouseMove={draw}
+              onMouseUp={stopDraw}
+              onMouseLeave={stopDraw}
+              onTouchStart={startDraw}
+              onTouchMove={draw}
+              onTouchEnd={stopDraw}
+            />
           </div>
 
           <button
