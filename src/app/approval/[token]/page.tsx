@@ -66,6 +66,21 @@ export default function ApprovalPage() {
     };
   }
 
+  async function downloadSignedPdf(token: string, quoteNumber: string) {
+  const res = await fetch(`/api/approval/${token}/pdf`);
+  if (!res.ok) throw new Error("PDF konnte nicht geladen werden.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Angebot-${quoteNumber}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+
   function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     isDrawing.current = true;
     const canvas = canvasRef.current!;
