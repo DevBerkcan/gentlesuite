@@ -19,6 +19,7 @@ export default function ApprovalPage() {
   const [done, setDone] = useState(false);
   const [declined, setDeclined] = useState(false);
   const [comment, setComment] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const signRef = useRef<HTMLDivElement>(null);
@@ -66,20 +67,27 @@ export default function ApprovalPage() {
     };
   }
 
-  async function downloadSignedPdf(token: string, quoteNumber: string) {
-  const res = await fetch(`/api/approval/${token}/pdf`);
-  if (!res.ok) throw new Error("PDF konnte nicht geladen werden.");
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Angebot-${quoteNumber}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
+  async function downloadSignedPdf() {
+    if (!quote) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/approval/${token}/pdf`);
+      if (!res.ok) throw new Error("PDF konnte nicht geladen werden.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Angebot-${quote.quoteNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("PDF konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     isDrawing.current = true;
@@ -203,12 +211,42 @@ export default function ApprovalPage() {
   if (done) {
     return (
       <div className="min-h-screen bg-[#1a1f2e] flex items-center justify-center text-white text-center px-4">
-        <div>
+        <div className="max-w-sm w-full">
           <div className="text-5xl mb-4">✅</div>
           <p className="text-2xl font-semibold mb-2">Angebot angenommen</p>
-          <p className="text-slate-400 text-sm">
+          <p className="text-slate-400 text-sm mb-8">
             Vielen Dank. Ihre Unterschrift wurde erfolgreich gespeichert.
           </p>
+          <button
+            onClick={downloadSignedPdf}
+            disabled={downloading}
+            className="inline-flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+          >
+            {downloading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Wird geladen…
+              </>
+            ) : (
+              <>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"
+                  />
+                </svg>
+                Angebot als PDF herunterladen
+              </>
+            )}
+          </button>
         </div>
       </div>
     );
