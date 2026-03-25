@@ -261,6 +261,7 @@ createExpense: (data: any) => {
   };
   return apiFetch<any>("/expenses", { method: "POST", body: JSON.stringify(payload) });
 },
+
 updateExpense: (id: string, data: any) => {
   const payload = {
     ...data,
@@ -283,6 +284,15 @@ updateExpense: (id: string, data: any) => {
     if (!res.ok) throw new Error(await res.text());
   },
   receiptUrl: (id: string) => `${API}/api/expenses/${id}/receipt`,
+  downloadReceipt: async (id: string): Promise<Blob> => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const res = await fetch(`${API}/api/expenses/${id}/receipt`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.blob();
+},
+
   // Subscriptions
   plans: () => apiFetch<any>("/subscriptions/plans"),
   customerSubs: (cid: string) => apiFetch<CustomerSubscription[]>(`/subscriptions/customer/${cid}`).then((list) => Array.isArray(list) ? list.map(normalizeSubscription) : list),
