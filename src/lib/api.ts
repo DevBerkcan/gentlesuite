@@ -252,8 +252,24 @@ export const api = {
   // Expenses
   expenses: (params = "") => apiFetch<PagedResult<ExpenseListItem>>(`/expenses?${params}`).then((d) => normalizePaged(d, normalizeExpense)),
   expense: (id: string) => apiFetch<ExpenseDetail>(`/expenses/${id}`).then(normalizeExpense),
-  createExpense: (data: any) => apiFetch<ExpenseDetail>("/expenses", { method: "POST", body: JSON.stringify(data) }).then(normalizeExpense),
-  updateExpense: (id: string, data: any) => apiFetch<ExpenseDetail>(`/expenses/${id}`, { method: "PUT", body: JSON.stringify(data) }).then(normalizeExpense),
+createExpense: (data: any) => {
+  const payload = {
+    ...data,
+    expenseCategoryId: data.expenseCategoryId || null,
+    recurringNextDate: data.recurringNextDate || null,
+    recurringInterval: data.isRecurring ? data.recurringInterval : null,
+  };
+  return apiFetch<any>("/expenses", { method: "POST", body: JSON.stringify(payload) });
+},
+updateExpense: (id: string, data: any) => {
+  const payload = {
+    ...data,
+    expenseCategoryId: data.expenseCategoryId || null,
+    recurringNextDate: data.recurringNextDate || null,
+    recurringInterval: data.isRecurring ? data.recurringInterval : null,
+  };
+  return apiFetch<any>(`/expenses/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+},
   deleteExpense: (id: string) => apiFetch<any>(`/expenses/${id}`, { method: "DELETE" }),
   bookExpense: (id: string) => apiFetch<any>(`/expenses/${id}/book`, { method: "POST" }),
   expenseCategories: () => apiFetch<any>("/expenses/categories"),
