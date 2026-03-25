@@ -38,7 +38,7 @@ import {
   TAX_MODE,
 } from "@/types/enums";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -227,6 +227,11 @@ export const api = {
   // Approval (public)
   approval: (token: string) => apiFetch<QuoteDetail>(`/approval/${token}`).then(normalizeQuote),
   processApproval: (token: string, data: any) => apiFetch<any>(`/approval/${token}`, { method: "POST", body: JSON.stringify(data) }),
+  approvalPdfBlob: async (token: string) => {
+  const res = await fetch(`${API}/api/approval/${token}/pdf`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.blob();
+  },
   // Invoices
   invoices: (params = "") => apiFetch<PagedResult<InvoiceListItem>>(`/invoices?${params}`).then((d) => normalizePaged(d, normalizeInvoice)),
   invoice: (id: string) => apiFetch<InvoiceDetail>(`/invoices/${id}`).then(normalizeInvoice),
