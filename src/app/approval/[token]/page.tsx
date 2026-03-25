@@ -67,27 +67,26 @@ export default function ApprovalPage() {
     };
   }
 
-  async function downloadSignedPdf() {
-    if (!quote) return;
-    setDownloading(true);
-    try {
-      const res = await fetch(`/api/approval/${token}/pdf`);
-      if (!res.ok) throw new Error("PDF konnte nicht geladen werden.");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Angebot-${quote.quoteNumber}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert("PDF konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.");
-    } finally {
-      setDownloading(false);
-    }
+async function downloadSignedPdf() {
+  if (!quote) return;
+  setDownloading(true);
+  try {
+    const blob = await api.approvalPdfBlob(token);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Angebot-${quote.quoteNumber}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch {
+    alert("PDF konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.");
+  } finally {
+    setDownloading(false);
   }
+}
+
 
   function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     isDrawing.current = true;
