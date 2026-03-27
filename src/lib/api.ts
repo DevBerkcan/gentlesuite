@@ -299,12 +299,63 @@ updateExpense: (id: string, data: any) => {
   createSub: (data: any) => apiFetch<CustomerSubscription>("/subscriptions", { method: "POST", body: JSON.stringify(data) }).then(normalizeSubscription),
   // Services
   services: () => apiFetch<ServiceCategory[]>("/servicecatalog").then((list) => Array.isArray(list) ? list.map(normalizeServiceCategory) : list),
-  createServiceCategory: (data: any) => apiFetch<any>("/servicecatalog/categories", { method: "POST", body: JSON.stringify(data) }),
-  updateServiceCategory: (id: string, data: any) => apiFetch<any>(`/servicecatalog/categories/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteServiceCategory: (id: string) => apiFetch<any>(`/servicecatalog/categories/${id}`, { method: "DELETE" }),
-  createServiceItem: (data: any) => apiFetch<any>("/servicecatalog/items", { method: "POST", body: JSON.stringify(data) }),
-  updateServiceItem: (id: string, data: any) => apiFetch<any>(`/servicecatalog/items/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteServiceItem: (id: string) => apiFetch<any>(`/servicecatalog/items/${id}`, { method: "DELETE" }),
+createServiceCategory: (data: any) =>
+  apiFetch<any>("/servicecatalog/categories", {
+    method: "POST",
+    body: JSON.stringify({
+      name: data.name,
+      description: data.description ?? null,
+      sortOrder: data.sortOrder ?? 0,
+    }),
+  }).then(normalizeServiceCategory),
+
+updateServiceCategory: (id: string, data: any) =>
+  apiFetch<any>(`/servicecatalog/categories/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      name: data.name,
+      description: data.description ?? null,
+      sortOrder: data.sortOrder ?? 0,
+    }),
+  }).then(normalizeServiceCategory),
+
+createServiceItem: (data: any) =>
+  apiFetch<any>("/servicecatalog/items", {
+    method: "POST",
+    body: JSON.stringify({
+      categoryId: data.categoryId,
+      name: data.name,
+      description: data.description ?? null,
+      shortCode: data.shortCode ?? null,
+      defaultPrice: data.defaultPrice ?? null,
+      defaultLineType:
+        typeof data.defaultLineType === "string"
+          ? QUOTE_LINE_TYPE.indexOf(data.defaultLineType)
+          : data.defaultLineType ?? 0,
+      sortOrder: data.sortOrder ?? 0,
+    }),
+  }),
+
+updateServiceItem: (id: string, data: any) =>
+  apiFetch<any>(`/servicecatalog/items/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      name: data.name,
+      description: data.description ?? null,
+      shortCode: data.shortCode ?? null,
+      defaultPrice: data.defaultPrice ?? null,
+      defaultLineType:
+        typeof data.defaultLineType === "string"
+          ? QUOTE_LINE_TYPE.indexOf(data.defaultLineType)
+          : data.defaultLineType ?? 0,
+      sortOrder: data.sortOrder ?? 0,
+    }),
+  }),
+
+
+deleteServiceItem: (id: string) =>
+  apiFetch<any>(`/servicecatalog/items/${id}`, { method: "DELETE" }),
   // Activity
   activity: (cid: string) => apiFetch<any>(`/activity/customer/${cid}`),
   // Settings
