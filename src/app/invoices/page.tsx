@@ -31,8 +31,6 @@ export default function InvoicesPage() {
     subject: "",
     paymentTermDays: 14,
     taxMode: "Standard",
-    serviceDateFrom: "",
-    serviceDateTo: "",
   };
 
   const [data, setData] = useState<any>(null);
@@ -239,8 +237,6 @@ export default function InvoicesPage() {
         subject: form.subject || undefined,
         paymentTermDays: form.paymentTermDays,
         taxMode: form.taxMode,
-        serviceDateFrom: form.serviceDateFrom || undefined,
-        serviceDateTo: form.serviceDateTo || undefined,
         lines: validLines.map((l: any, i: number) => ({
           serviceCatalogItemId: l.serviceCatalogItemId || undefined,
           title: l.title,
@@ -675,7 +671,7 @@ export default function InvoicesPage() {
                       className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background"
                     />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="text-xs text-muted block mb-1">Steuerart</label>
                     <select
                       value={form.taxMode}
@@ -686,24 +682,6 @@ export default function InvoicesPage() {
                       <option value="SmallBusiness">Kleinunternehmer</option>
                       <option value="ReverseCharge">Reverse Charge</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted block mb-1">Leistungszeitraum</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="date"
-                        value={form.serviceDateFrom}
-                        onChange={(e) => setForm((f: any) => ({ ...f, serviceDateFrom: e.target.value }))}
-                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background"
-                      />
-                      <span className="self-center text-muted text-sm">–</span>
-                      <input
-                        type="date"
-                        value={form.serviceDateTo}
-                        onChange={(e) => setForm((f: any) => ({ ...f, serviceDateTo: e.target.value }))}
-                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background"
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -736,17 +714,17 @@ export default function InvoicesPage() {
                             <button
                               type="button"
                               onClick={(e) => {
-                if (servicePickerOpen === idx) {
-                  setServicePickerOpen(null);
-                  setPickerAnchor(null);
-                } else {
-                  const btn = e.currentTarget as HTMLButtonElement;
-                  const rect = btn.getBoundingClientRect();
-                  setPickerAnchor({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
-                  setServicePickerOpen(idx);
-                }
-                setServiceSearch("");
-              }}
+                                if (servicePickerOpen === idx) {
+                                  setServicePickerOpen(null);
+                                  setPickerAnchor(null);
+                                } else {
+                                  const btn = e.currentTarget as HTMLButtonElement;
+                                  const rect = btn.getBoundingClientRect();
+                                  setPickerAnchor({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+                                  setServicePickerOpen(idx);
+                                }
+                                setServiceSearch("");
+                              }}
                               className="px-2 py-1.5 text-xs border border-border rounded hover:bg-background text-muted hover:text-primary whitespace-nowrap"
                               title="Leistung aus Katalog wählen"
                             >
@@ -865,10 +843,7 @@ export default function InvoicesPage() {
                 </div>
 
                 <div className="flex gap-3 mb-4">
-                  <button
-                    onClick={addLine}
-                    className="text-primary text-sm hover:underline"
-                  >
+                  <button onClick={addLine} className="text-primary text-sm hover:underline">
                     + Leere Position
                   </button>
                   <button

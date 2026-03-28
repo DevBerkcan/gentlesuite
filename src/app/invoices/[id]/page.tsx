@@ -73,9 +73,7 @@ async function handlePdfDownload() {
         notes: inv.notes || "",
         taxMode: asTaxMode(inv.taxMode) || "Standard",
         invoiceDate: inv.invoiceDate?.split("T")[0] || "",
-        dueDate: inv.dueDate?.split("T")[0] || "",
-        serviceDateFrom: inv.serviceDateFrom?.split("T")[0] || "",
-        serviceDateTo: inv.serviceDateTo?.split("T")[0] || "",
+        dueDate: inv.dueDate?.split("T")[0] || ""
       };
       const nextLines = (inv.lines || []).map((l: any, i: number) => ({
         title: l.title || "",
@@ -104,8 +102,6 @@ async function handlePdfDownload() {
         taxMode: currentForm.taxMode || "Standard",
         invoiceDate: currentForm.invoiceDate || "",
         dueDate: currentForm.dueDate || "",
-        serviceDateFrom: currentForm.serviceDateFrom || "",
-        serviceDateTo: currentForm.serviceDateTo || "",
       },
       lines: currentLines.map((l: any, i: number) => ({
         title: l.title || "",

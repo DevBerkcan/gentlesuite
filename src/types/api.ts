@@ -235,8 +235,6 @@ export interface InvoiceDetail {
   taxMode: TaxMode;
   invoiceDate: string;
   dueDate: string;
-  serviceDateFrom: string;
-  serviceDateTo: string;
   netTotal: number;
   vatAmount: number;
   grossTotal: number;
