@@ -25,11 +25,16 @@ export default function ApprovalPage() {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState(false);
   const [numPages, setNumPages] = useState<number>(0);
-  const [scale, setScale] = useState(0.59);
+  const [scale, setScale] = useState<number | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const signRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
 
   const pdfDirectUrl = `${API}/api/approval/${token}/pdf`;
 
@@ -86,9 +91,12 @@ export default function ApprovalPage() {
 
   useEffect(() => {
     function updateScale() {
-      if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth - 32;
-      setScale(Math.min(1, w / 595));
+      const isMobile = window.innerWidth < 768;
+      if (isMobile) {
+        setScale(0.59);
+      } else {
+        setScale(1);
+      }
     }
     updateScale();
     window.addEventListener("resize", updateScale);
@@ -318,19 +326,19 @@ export default function ApprovalPage() {
             <span>PDF-Ansicht</span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setScale((z) => Math.max(ZOOM_MIN, parseFloat((z - ZOOM_STEP).toFixed(2))))}
-                disabled={scale <= ZOOM_MIN}
+                onClick={() => setScale((z) => Math.max(ZOOM_MIN, parseFloat(((z ?? 1) - ZOOM_STEP).toFixed(2))))}
+                disabled={(scale ?? 1) <= ZOOM_MIN}
                 className="w-7 h-7 flex items-center justify-center rounded bg-[#1a1f2e] hover:bg-slate-700 disabled:opacity-30 text-base font-bold"
                 title="Verkleinern"
               >
                 −
               </button>
               <span className="w-12 text-center text-xs tabular-nums">
-                {Math.round(scale * 100)}%
+                {Math.round((scale ?? 1) * 100)}%
               </span>
               <button
-                onClick={() => setScale((z) => Math.min(ZOOM_MAX, parseFloat((z + ZOOM_STEP).toFixed(2))))}
-                disabled={scale >= ZOOM_MAX}
+                onClick={() => setScale((z) => Math.min(ZOOM_MAX, parseFloat(((z ?? 1) + ZOOM_STEP).toFixed(2))))}
+                disabled={(scale ?? 1) >= ZOOM_MAX}
                 className="w-7 h-7 flex items-center justify-center rounded bg-[#1a1f2e] hover:bg-slate-700 disabled:opacity-30 text-base font-bold"
                 title="Vergrößern"
               >
@@ -338,9 +346,8 @@ export default function ApprovalPage() {
               </button>
               <button
                 onClick={() => {
-                  if (!containerRef.current) return;
-                  const w = containerRef.current.clientWidth - 32;
-                  setScale(Math.min(1, w / 595));
+                  const isMobile = window.innerWidth < 768;
+                  setScale(isMobile ? 0.59 : 1);
                 }}
                 className="text-xs px-2 py-1 rounded bg-[#1a1f2e] hover:bg-slate-700"
                 title="Zurücksetzen"
@@ -358,7 +365,43 @@ export default function ApprovalPage() {
             </div>
           </div>
 
-          <div className="bg-[#2a3147] overflow-auto" style={{ maxHeight: 600 }}>
+          <div
+            ref={viewerRef}
+            className="bg-[#2a3147] overflow-hidden relative"
+            style={{
+              maxHeight: 600,
+              cursor: (scale ?? 1) > 1 ? (isPanning ? "grabbing" : "grab") : "default",
+              userSelect: "none",
+            }}
+            onMouseDown={(e) => {
+              if ((scale ?? 1) <= 1) return;
+              setIsPanning(true);
+              panStart.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+            }}
+            onMouseMove={(e) => {
+              if (!isPanning || !panStart.current) return;
+              setOffset({
+                x: panStart.current.ox + (e.clientX - panStart.current.x),
+                y: panStart.current.oy + (e.clientY - panStart.current.y),
+              });
+            }}
+            onMouseUp={() => { setIsPanning(false); panStart.current = null; }}
+            onMouseLeave={() => { setIsPanning(false); panStart.current = null; }}
+            onTouchStart={(e) => {
+              if ((scale ?? 1) <= 1) return;
+              const t = e.touches[0];
+              panStart.current = { x: t.clientX, y: t.clientY, ox: offset.x, oy: offset.y };
+            }}
+            onTouchMove={(e) => {
+              if (!panStart.current) return;
+              const t = e.touches[0];
+              setOffset({
+                x: panStart.current.ox + (t.clientX - panStart.current.x),
+                y: panStart.current.oy + (t.clientY - panStart.current.y),
+              });
+            }}
+            onTouchEnd={() => { panStart.current = null; }}
+          >
             {pdfLoadError || !pdfBlobUrl ? (
               <div className="flex flex-col items-center justify-center h-64 gap-4 p-6 text-slate-400 text-sm text-center">
                 <p>Das PDF konnte nicht geladen werden.</p>
@@ -371,7 +414,14 @@ export default function ApprovalPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col items-center py-4 gap-4">
+              <div
+                className="flex flex-col items-center py-4 gap-4"
+                style={{
+                  transform: `translate(${offset.x}px, ${offset.y}px)`,
+                  transition: isPanning ? "none" : "transform 0.1s ease",
+                  willChange: "transform",
+                }}
+              >
                 <Document
                   file={pdfBlobUrl}
                   onLoadSuccess={({ numPages }) => setNumPages(numPages)}
@@ -386,7 +436,7 @@ export default function ApprovalPage() {
                     <div key={i} className="mb-3 shadow-lg">
                       <Page
                         pageNumber={i + 1}
-                        scale={scale}
+                        scale={scale ?? 1}
                         renderTextLayer={true}
                         renderAnnotationLayer={false}
                       />
