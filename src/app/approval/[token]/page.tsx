@@ -25,7 +25,7 @@ export default function ApprovalPage() {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState(false);
   const [numPages, setNumPages] = useState<number>(0);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(0.59);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const signRef = useRef<HTMLDivElement>(null);
