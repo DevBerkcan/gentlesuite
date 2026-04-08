@@ -5,12 +5,13 @@ import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
 import type { QuoteDetail } from "@/types/api";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 export default function ApprovalPage() {
   const { token } = useParams<{ token: string }>();
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfPage, setPdfPage] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -22,14 +23,12 @@ export default function ApprovalPage() {
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const signRef = useRef<HTMLDivElement>(null);
 
+  const pdfDirectUrl = `${API}/api/approval/${token}/pdf`;
+
   useEffect(() => {
     api.approval(token)
       .then((q) => {
         setQuote(q);
-        return api.quotePdfBlob(q.id);
-      })
-      .then((blob) => {
-        setPdfUrl(URL.createObjectURL(blob));
       })
       .catch(() => {
         setExpired(true);
@@ -50,7 +49,6 @@ export default function ApprovalPage() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const resizeObserver = new ResizeObserver(() => {
       const rect = canvas.getBoundingClientRect();
       const ctx = canvas.getContext("2d")!;
@@ -61,7 +59,6 @@ export default function ApprovalPage() {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.putImageData(imageData, 0, 0);
     });
-
     resizeObserver.observe(canvas);
     return () => resizeObserver.disconnect();
   }, []);
@@ -89,7 +86,9 @@ export default function ApprovalPage() {
     if (!quote) return;
     setDownloading(true);
     try {
-      const blob = await api.approvalPdfBlob(token);
+      const res = await fetch(pdfDirectUrl);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -284,34 +283,43 @@ export default function ApprovalPage() {
           </button>
         </div>
 
-        {pdfUrl && (
-          <div className="rounded-xl overflow-hidden border border-slate-700 mb-8">
-            <div className="bg-[#252b3b] flex items-center justify-between px-4 py-2 text-sm text-slate-300">
-              <span>PDF-Ansicht</span>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setPdfPage((p) => Math.max(1, p - 1))} className="hover:text-white px-1">‹</button>
-                <span>{pdfPage}</span>
-                <button onClick={() => setPdfPage((p) => p + 1)} className="hover:text-white px-1">›</button>
-                <a
-                  href={pdfUrl}
-                  download={`Angebot-${quote?.quoteNumber ?? ""}.pdf`}
-                  className="hover:text-white ml-2"
-                  title="Herunterladen"
-                >
-                  ⬇
-                </a>
-              </div>
-            </div>
-            <div className="bg-[#2a3147] p-4">
-              <iframe
-                src={`${pdfUrl}#page=${pdfPage}`}
-                className="w-full rounded bg-white"
-                style={{ height: "700px", border: "none" }}
-                title="Angebot PDF"
-              />
+        <div className="rounded-xl overflow-hidden border border-slate-700 mb-8">
+          <div className="bg-[#252b3b] flex items-center justify-between px-4 py-2 text-sm text-slate-300">
+            <span>PDF-Ansicht</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPdfPage((p) => Math.max(1, p - 1))}
+                className="hover:text-white px-1"
+              >
+                ‹
+              </button>
+              <span>{pdfPage}</span>
+              <button
+                onClick={() => setPdfPage((p) => p + 1)}
+                className="hover:text-white px-1"
+              >
+                ›
+              </button>
+              <a
+                href={pdfDirectUrl}
+                download={`Angebot-${quote?.quoteNumber ?? ""}.pdf`}
+                className="hover:text-white ml-2"
+                title="Herunterladen"
+              >
+                ⬇
+              </a>
             </div>
           </div>
-        )}
+          <div className="bg-[#2a3147] p-4">
+            <iframe
+              key={pdfPage}
+              src={`${pdfDirectUrl}#page=${pdfPage}`}
+              className="w-full rounded bg-white"
+              style={{ height: "700px", border: "none" }}
+              title="Angebot PDF"
+            />
+          </div>
+        </div>
 
         <div ref={signRef} className="bg-[#252b3b] rounded-xl p-6 border border-slate-700">
 
