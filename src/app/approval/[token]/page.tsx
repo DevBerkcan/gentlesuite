@@ -2,11 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Document, Page, pdfjs } from "react-pdf";
 import { api } from "@/lib/api";
 import type { QuoteDetail } from "@/types/api";
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -15,29 +12,47 @@ export default function ApprovalPage() {
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
-  const [pdfPage, setPdfPage] = useState(1);
-  const [pdfTotalPages, setPdfTotalPages] = useState<number | null>(null);
-  const [pdfError, setPdfError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [declined, setDeclined] = useState(false);
   const [comment, setComment] = useState("");
   const [downloading, setDownloading] = useState(false);
-  const [containerWidth, setContainerWidth] = useState<number>(600);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfLoadError, setPdfLoadError] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const signRef = useRef<HTMLDivElement>(null);
-  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const pdfScrollRef = useRef<HTMLDivElement>(null);
 
   const pdfDirectUrl = `${API}/api/approval/${token}/pdf`;
 
   useEffect(() => {
     api
       .approval(token)
-      .then((q) => setQuote(q))
-      .catch(() => setExpired(true))
+      .then((q) => {
+        setQuote(q);
+        return fetch(pdfDirectUrl);
+      })
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.blob();
+      })
+      .then((blob) => {
+        setPdfBlobUrl(URL.createObjectURL(blob));
+      })
+      .catch((err) => {
+        if (!quote) setExpired(true);
+        else setPdfLoadError(true);
+      })
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+    };
+  }, [pdfBlobUrl]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -61,17 +76,6 @@ export default function ApprovalPage() {
       ctx.putImageData(imageData, 0, 0);
     });
     ro.observe(canvas);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const el = pdfContainerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setContainerWidth(el.clientWidth || 600);
-    });
-    ro.observe(el);
-    setContainerWidth(el.clientWidth || 600);
     return () => ro.disconnect();
   }, []);
 
@@ -199,15 +203,6 @@ export default function ApprovalPage() {
     }
   }
 
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setPdfTotalPages(numPages);
-    setPdfError(false);
-  }, []);
-
-  const onDocumentLoadError = useCallback(() => {
-    setPdfError(true);
-  }, []);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#1a1f2e] flex items-center justify-center">
@@ -275,6 +270,10 @@ export default function ApprovalPage() {
     );
   }
 
+  const ZOOM_STEP = 0.25;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 3;
+
   return (
     <div className="min-h-screen bg-[#1a1f2e] text-white">
       <div className="max-w-2xl mx-auto px-4 py-12">
@@ -301,29 +300,37 @@ export default function ApprovalPage() {
         <div className="rounded-xl overflow-hidden border border-slate-700 mb-8">
           <div className="bg-[#252b3b] flex items-center justify-between px-4 py-2 text-sm text-slate-300">
             <span>PDF-Ansicht</span>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setPdfPage((p) => Math.max(1, p - 1))}
-                disabled={pdfPage <= 1}
-                className="hover:text-white px-1 disabled:opacity-30"
+                onClick={() => setZoom((z) => Math.max(ZOOM_MIN, parseFloat((z - ZOOM_STEP).toFixed(2))))}
+                disabled={zoom <= ZOOM_MIN}
+                className="w-7 h-7 flex items-center justify-center rounded bg-[#1a1f2e] hover:bg-slate-700 disabled:opacity-30 text-base font-bold"
+                title="Verkleinern"
               >
-                ‹
+                −
               </button>
-              <span>
-                {pdfPage}
-                {pdfTotalPages !== null ? ` / ${pdfTotalPages}` : ""}
+              <span className="w-12 text-center text-xs tabular-nums">
+                {Math.round(zoom * 100)}%
               </span>
               <button
-                onClick={() => setPdfPage((p) => (pdfTotalPages !== null ? Math.min(pdfTotalPages, p + 1) : p + 1))}
-                disabled={pdfTotalPages !== null && pdfPage >= pdfTotalPages}
-                className="hover:text-white px-1 disabled:opacity-30"
+                onClick={() => setZoom((z) => Math.min(ZOOM_MAX, parseFloat((z + ZOOM_STEP).toFixed(2))))}
+                disabled={zoom >= ZOOM_MAX}
+                className="w-7 h-7 flex items-center justify-center rounded bg-[#1a1f2e] hover:bg-slate-700 disabled:opacity-30 text-base font-bold"
+                title="Vergrößern"
               >
-                ›
+                +
+              </button>
+              <button
+                onClick={() => setZoom(1)}
+                className="text-xs px-2 py-1 rounded bg-[#1a1f2e] hover:bg-slate-700"
+                title="Zurücksetzen"
+              >
+                1:1
               </button>
               <a
                 href={pdfDirectUrl}
                 download={`Angebot-${quote?.quoteNumber ?? ""}.pdf`}
-                className="hover:text-white ml-2"
+                className="hover:text-white ml-1"
                 title="Herunterladen"
               >
                 ⬇
@@ -331,50 +338,49 @@ export default function ApprovalPage() {
             </div>
           </div>
 
-          <div className="bg-[#2a3147] p-0">
-            <div
-              ref={pdfContainerRef}
-              className="w-full bg-white overflow-hidden flex flex-col items-center"
-              style={{ minHeight: 500 }}
-            >
-              {pdfError ? (
-                <div className="flex flex-col items-center justify-center h-64 gap-4 p-6 text-slate-600 text-sm text-center">
-                  <p>Das PDF konnte nicht geladen werden.</p>
-                  <a
-                    href={pdfDirectUrl}
-                    download={`Angebot-${quote?.quoteNumber ?? ""}.pdf`}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-500 transition-colors"
-                  >
-                    PDF herunterladen
-                  </a>
-                </div>
-              ) : (
-                <Document
-                  file={pdfDirectUrl}
-                  onLoadSuccess={onDocumentLoadSuccess}
-                  onLoadError={onDocumentLoadError}
-                  loading={
-                    <div className="flex items-center justify-center h-64 w-full">
-                      <div className="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  }
+          <div
+            ref={pdfScrollRef}
+            className="bg-[#2a3147] overflow-auto"
+            style={{ maxHeight: 600 }}
+          >
+            {pdfLoadError || !pdfBlobUrl ? (
+              <div className="flex flex-col items-center justify-center h-64 gap-4 p-6 text-slate-400 text-sm text-center">
+                <p>Das PDF konnte nicht geladen werden.</p>
+                <a
+                  href={pdfDirectUrl}
+                  download={`Angebot-${quote?.quoteNumber ?? ""}.pdf`}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-500 transition-colors"
                 >
-                  <Page
-                    pageNumber={pdfPage}
-                    width={containerWidth}
-                    renderTextLayer={false}
-                    renderAnnotationLayer={false}
-                  />
-                </Document>
-              )}
-            </div>
+                  PDF herunterladen
+                </a>
+              </div>
+            ) : (
+              <div
+                style={{
+                  transformOrigin: "top center",
+                  transform: `scale(${zoom})`,
+                  transition: "transform 0.15s ease",
+                  width: "100%",
+                }}
+              >
+                <iframe
+                  src={pdfBlobUrl}
+                  title="Angebot PDF"
+                  style={{
+                    width: "100%",
+                    height: `${Math.round(842 * zoom < 500 ? 500 : 842)}px`,
+                    border: "none",
+                    display: "block",
+                    background: "#fff",
+                  }}
+                  onError={() => setPdfLoadError(true)}
+                />
+              </div>
+            )}
           </div>
         </div>
 
-        <div
-          ref={signRef}
-          className="bg-[#252b3b] rounded-xl p-6 border border-slate-700"
-        >
+        <div ref={signRef} className="bg-[#252b3b] rounded-xl p-6 border border-slate-700">
           {quote?.customerName && (
             <div className="mb-5">
               <label className="block text-sm font-medium text-slate-300 mb-1">Unterzeichner</label>
