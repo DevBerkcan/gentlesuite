@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
 import { api } from "@/lib/api";
 import type { QuoteDetail } from "@/types/api";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -14,31 +19,26 @@ export default function ApprovalPage() {
   const [expired, setExpired] = useState(false);
   const [pdfPage, setPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState<number | null>(null);
+  const [pdfError, setPdfError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [declined, setDeclined] = useState(false);
   const [comment, setComment] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [containerWidth, setContainerWidth] = useState<number>(600);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
   const signRef = useRef<HTMLDivElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   const pdfDirectUrl = `${API}/api/approval/${token}/pdf`;
 
   useEffect(() => {
     api
       .approval(token)
-      .then((q) => {
-        setQuote(q);
-      })
-      .catch(() => {
-        setExpired(true);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .then((q) => setQuote(q))
+      .catch(() => setExpired(true))
+      .finally(() => setLoading(false));
   }, [token]);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function ApprovalPage() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const resizeObserver = new ResizeObserver(() => {
+    const ro = new ResizeObserver(() => {
       const rect = canvas.getBoundingClientRect();
       const ctx = canvas.getContext("2d")!;
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -62,14 +62,23 @@ export default function ApprovalPage() {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.putImageData(imageData, 0, 0);
     });
-    resizeObserver.observe(canvas);
-    return () => resizeObserver.disconnect();
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = pdfContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setContainerWidth(el.clientWidth || 600);
+    });
+    ro.observe(el);
+    setContainerWidth(el.clientWidth || 600);
+    return () => ro.disconnect();
   }, []);
 
   function getPos(
-    e:
-      | React.MouseEvent<HTMLCanvasElement>
-      | React.TouchEvent<HTMLCanvasElement>,
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
     canvas: HTMLCanvasElement
   ) {
     const rect = canvas.getBoundingClientRect();
@@ -92,7 +101,7 @@ export default function ApprovalPage() {
     setDownloading(true);
     try {
       const res = await fetch(pdfDirectUrl);
-      if (!res.ok) throw new Error("Fehler beim Laden des PDFs.");
+      if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -103,47 +112,23 @@ export default function ApprovalPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      alert(
-        "PDF konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut."
-      );
+      alert("PDF konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.");
     } finally {
       setDownloading(false);
     }
   }
 
-  function navigatePdfPage(newPage: number) {
-    if (newPage < 1) return;
-    if (pdfTotalPages !== null && newPage > pdfTotalPages) return;
-    setPdfPage(newPage);
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    try {
-      iframe.contentWindow?.postMessage({ type: "pdfPage", page: newPage }, "*");
-    } catch {
-      // cross-origin iframe: fallback to src update handled by key change
-    }
-  }
-
-  function startDraw(
-    e:
-      | React.MouseEvent<HTMLCanvasElement>
-      | React.TouchEvent<HTMLCanvasElement>
-  ) {
+  function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     e.preventDefault();
     isDrawing.current = true;
     const canvas = canvasRef.current!;
     const pos = getPos(e, canvas);
-    lastPos.current = pos;
     const ctx = canvas.getContext("2d")!;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
   }
 
-  function draw(
-    e:
-      | React.MouseEvent<HTMLCanvasElement>
-      | React.TouchEvent<HTMLCanvasElement>
-  ) {
+  function draw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     if (!isDrawing.current) return;
     e.preventDefault();
     const canvas = canvasRef.current!;
@@ -155,12 +140,10 @@ export default function ApprovalPage() {
     const pos = getPos(e, canvas);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
-    lastPos.current = pos;
   }
 
   function stopDraw() {
     isDrawing.current = false;
-    lastPos.current = null;
   }
 
   function clearCanvas() {
@@ -218,6 +201,15 @@ export default function ApprovalPage() {
     }
   }
 
+  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
+    setPdfTotalPages(numPages);
+    setPdfError(false);
+  }, []);
+
+  const onDocumentLoadError = useCallback(() => {
+    setPdfError(true);
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#1a1f2e] flex items-center justify-center">
@@ -232,8 +224,7 @@ export default function ApprovalPage() {
         <div>
           <p className="text-2xl font-semibold mb-2">Link abgelaufen</p>
           <p className="text-slate-400 text-sm">
-            Dieser Angebots-Link ist nicht mehr gültig. Bitte kontaktieren Sie
-            uns.
+            Dieser Angebots-Link ist nicht mehr gültig. Bitte kontaktieren Sie uns.
           </p>
         </div>
       </div>
@@ -261,19 +252,8 @@ export default function ApprovalPage() {
               </>
             ) : (
               <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"
-                  />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
                 </svg>
                 Angebot als PDF herunterladen
               </>
@@ -304,21 +284,16 @@ export default function ApprovalPage() {
           <div className="relative w-40 h-40 mb-6">
             <div className="absolute inset-0 rounded-full bg-[#2a3147]" />
             <div className="absolute inset-4 rounded-full bg-[#3b4568]" />
-            <div className="absolute inset-0 flex items-center justify-center text-7xl select-none">
-              📋
-            </div>
+            <div className="absolute inset-0 flex items-center justify-center text-7xl select-none">📋</div>
           </div>
           <h1 className="text-3xl font-bold mb-4">Angebot</h1>
           <p className="text-slate-300 text-sm leading-relaxed max-w-md">
-            Vielen Dank für Ihr Interesse. Bitte prüfen Sie das nachfolgende
-            Dokument sorgfältig. Wenn Sie damit einverstanden sind,
-            unterschreiben Sie es am Ende mittels digitaler Signatur. Im
-            Anschluss können Sie das Dokument als PDF herunterladen.
+            Vielen Dank für Ihr Interesse. Bitte prüfen Sie das nachfolgende Dokument sorgfältig.
+            Wenn Sie damit einverstanden sind, unterschreiben Sie es am Ende mittels digitaler Signatur.
+            Im Anschluss können Sie das Dokument als PDF herunterladen.
           </p>
           <button
-            onClick={() =>
-              signRef.current?.scrollIntoView({ behavior: "smooth" })
-            }
+            onClick={() => signRef.current?.scrollIntoView({ behavior: "smooth" })}
             className="mt-6 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
           >
             Jetzt unterschreiben <span>↓</span>
@@ -330,7 +305,7 @@ export default function ApprovalPage() {
             <span>PDF-Ansicht</span>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigatePdfPage(pdfPage - 1)}
+                onClick={() => setPdfPage((p) => Math.max(1, p - 1))}
                 disabled={pdfPage <= 1}
                 className="hover:text-white px-1 disabled:opacity-30"
               >
@@ -341,10 +316,8 @@ export default function ApprovalPage() {
                 {pdfTotalPages !== null ? ` / ${pdfTotalPages}` : ""}
               </span>
               <button
-                onClick={() => navigatePdfPage(pdfPage + 1)}
-                disabled={
-                  pdfTotalPages !== null && pdfPage >= pdfTotalPages
-                }
+                onClick={() => setPdfPage((p) => (pdfTotalPages !== null ? Math.min(pdfTotalPages, p + 1) : p + 1))}
+                disabled={pdfTotalPages !== null && pdfPage >= pdfTotalPages}
                 className="hover:text-white px-1 disabled:opacity-30"
               >
                 ›
@@ -362,43 +335,13 @@ export default function ApprovalPage() {
 
           <div className="bg-[#2a3147] p-0">
             <div
-              className="w-full rounded bg-white overflow-hidden"
-              style={{ height: "700px" }}
+              ref={pdfContainerRef}
+              className="w-full bg-white overflow-hidden flex flex-col items-center"
+              style={{ minHeight: 500 }}
             >
-              <object
-                ref={iframeRef as any}
-                data={`${pdfDirectUrl}#page=${pdfPage}&toolbar=0&navpanes=0&scrollbar=0`}
-                type="application/pdf"
-                className="w-full h-full"
-                aria-label="Angebot PDF"
-              >
-                <iframe
-                  ref={iframeRef}
-                  src={`${pdfDirectUrl}#page=${pdfPage}&toolbar=0&navpanes=0&scrollbar=0`}
-                  className="w-full h-full"
-                  style={{ border: "none" }}
-                  title="Angebot PDF"
-                  onLoad={() => {
-                    const iframe = iframeRef.current;
-                    if (!iframe) return;
-                    try {
-                      const doc =
-                        iframe.contentDocument ||
-                        iframe.contentWindow?.document;
-                      if (doc) {
-                        const pages = doc.querySelectorAll(".page");
-                        if (pages.length > 0)
-                          setPdfTotalPages(pages.length);
-                      }
-                    } catch {
-                      // cross-origin, ignore
-                    }
-                  }}
-                />
-                <div className="flex flex-col items-center justify-center h-full gap-4 p-6 text-slate-600 text-sm text-center">
-                  <p>
-                    Ihr Browser kann das PDF nicht direkt anzeigen.
-                  </p>
+              {pdfError ? (
+                <div className="flex flex-col items-center justify-center h-64 gap-4 p-6 text-slate-600 text-sm text-center">
+                  <p>Das PDF konnte nicht geladen werden.</p>
                   <a
                     href={pdfDirectUrl}
                     download={`Angebot-${quote?.quoteNumber ?? ""}.pdf`}
@@ -407,7 +350,25 @@ export default function ApprovalPage() {
                     PDF herunterladen
                   </a>
                 </div>
-              </object>
+              ) : (
+                <Document
+                  file={pdfDirectUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
+                  loading={
+                    <div className="flex items-center justify-center h-64 w-full">
+                      <div className="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  }
+                >
+                  <Page
+                    pageNumber={pdfPage}
+                    width={containerWidth}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                  />
+                </Document>
+              )}
             </div>
           </div>
         </div>
@@ -418,9 +379,7 @@ export default function ApprovalPage() {
         >
           {quote?.customerName && (
             <div className="mb-5">
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                Unterzeichner
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Unterzeichner</label>
               <div className="w-full bg-[#1a1f2e] border border-slate-700 rounded-lg px-4 py-2.5 text-slate-400 text-sm select-none">
                 {quote.customerName}
               </div>
@@ -428,9 +387,7 @@ export default function ApprovalPage() {
           )}
 
           <div className="mb-2">
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Unterschrift
-            </label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Unterschrift</label>
           </div>
 
           <div
@@ -472,9 +429,7 @@ export default function ApprovalPage() {
 
           <details className="group">
             <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300 list-none flex items-center gap-1 select-none">
-              <span className="group-open:rotate-90 transition-transform inline-block">
-                ›
-              </span>
+              <span className="group-open:rotate-90 transition-transform inline-block">›</span>
               Angebot ablehnen
             </summary>
             <div className="mt-3">
