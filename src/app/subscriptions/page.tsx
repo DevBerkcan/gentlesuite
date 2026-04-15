@@ -166,7 +166,7 @@ export default function SubscriptionsPage() {
     setTriggerLoading(true);
     try {
       await api.triggerSubscriptionInvoices();
-      setSuccess("Job ausgelöst — Rechnungen werden erstellt und versendet");
+      setSuccess("Job ausgelöst — Rechnungen werden erstellt, zum Versenden geh zu Rechnungen");
       setTimeout(() => setSuccess(""), 6000);
     } catch {
       setError("Fehler beim Auslösen des Jobs");
