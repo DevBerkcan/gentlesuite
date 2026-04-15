@@ -13,6 +13,7 @@ const emptyLine = () => ({
   discountPercent: 0,
   vatPercent: 19,
   sortOrder: 0,
+  lineType: "OneTime" as "OneTime" | "RecurringMonthly",
 });
 
 const statusMap: Record<string, string> = {
@@ -59,7 +60,6 @@ export default function InvoicesPage() {
   const [servicePickerOpen, setServicePickerOpen] = useState<number | null>(null);
   const servicePickerRef = useRef<HTMLDivElement>(null);
   const [pickerAnchor, setPickerAnchor] = useState<{ top: number; left: number } | null>(null);
-  const pickerButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const load = (status = "", p = 1) => {
     const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
@@ -225,40 +225,70 @@ export default function InvoicesPage() {
   const primaryLocation = selectedCustomer?.locations?.find((loc: any) => loc.isPrimary) ?? selectedCustomer?.locations?.[0];
   const primaryContact = selectedCustomer?.contacts?.find((c: any) => c.isPrimary) ?? selectedCustomer?.contacts?.[0];
 
-  const save = async () => {
-    if (!form.customerId) { setError("Bitte einen Kunden auswählen."); return; }
-    const validLines = lines.filter((l: any) => l.title.trim());
-    if (!validLines.length) { setError("Mindestens eine Position mit Titel ist erforderlich."); return; }
-    setSaving(true);
-    setError("");
-    try {
-      const req = {
+const save = async () => {
+  if (!form.customerId) { setError("Bitte einen Kunden auswählen."); return; }
+  const validLines = lines.filter((l: any) => l.title.trim());
+  if (!validLines.length) { setError("Mindestens eine Position mit Titel ist erforderlich."); return; }
+  setSaving(true);
+  setError("");
+  try {
+    const req = {
+      customerId: form.customerId,
+      subject: form.subject || undefined,
+      paymentTermDays: form.paymentTermDays,
+      taxMode: form.taxMode,
+      lines: validLines.map((l: any, i: number) => ({
+        serviceCatalogItemId: l.serviceCatalogItemId || undefined,
+        title: l.title,
+        description: l.description || undefined,
+        unit: l.unit || undefined,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        vatPercent: l.vatPercent,
+        sortOrder: i,
+      })),
+    };
+
+    const inv = await api.createInvoice(req);
+
+    await api.finalizeInvoice(inv.id, { sendEmail: false });
+
+    const recurringLines = validLines.filter((l: any) => l.lineType === "RecurringMonthly");
+
+    if (recurringLines.length > 0) {
+      const monthlyPrice = recurringLines.reduce((s: number, l: any) => {
+        const base = l.quantity * l.unitPrice;
+        const disc = base * ((l.discountPercent || 0) / 100);
+        return s + (base - disc);
+      }, 0);
+
+      const plan = await api.createPlan({
+        name: recurringLines[0].title,
+        description: recurringLines.map((l: any) => l.description || l.title).join("\n"),
+        monthlyPrice,
+        billingCycle: "Monthly",
+        isActive: true,
+      });
+
+      await api.createSub({
         customerId: form.customerId,
-        subject: form.subject || undefined,
-        paymentTermDays: form.paymentTermDays,
-        taxMode: form.taxMode,
-        lines: validLines.map((l: any, i: number) => ({
-          serviceCatalogItemId: l.serviceCatalogItemId || undefined,
-          title: l.title,
-          description: l.description || undefined,
-          unit: l.unit || undefined,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          vatPercent: l.vatPercent,
-          sortOrder: i,
-        })),
-      };
-      const inv = await api.createInvoice(req);
-      clearForm();
-      clearLines();
-      setShow(false);
-      window.location.href = `/invoices/${inv.id}`;
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
+        planId: plan.id,
+        startDate: new Date().toISOString(),
+        nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      });
     }
-  };
+
+    clearForm();
+    clearLines();
+    setShow(false);
+    window.location.href = `/invoices/${inv.id}`;
+  } catch (e: any) {
+    setError(e.message);
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   const toggleSelect = (id: string) =>
     setSelected((s) => {
@@ -689,21 +719,26 @@ export default function InvoicesPage() {
                   <h3 className="font-semibold text-sm">Positionen</h3>
                 </div>
 
-                <div className="border border-border rounded-lg mb-3" style={{ overflowX: 'visible', overflowY: 'visible' }}>
-                  <div className="grid grid-cols-12 gap-0 bg-background border-b border-border px-3 py-2 text-xs text-muted">
-                    <div className="col-span-4">Titel / Leistung</div>
-                    <div className="col-span-1 text-center">Menge</div>
-                    <div className="col-span-2 text-right">Preis (€)</div>
-                    <div className="col-span-1 text-center">Rabatt%</div>
-                    <div className="col-span-1 text-center">MwSt%</div>
-                    <div className="col-span-2 text-right">Netto (€)</div>
-                    <div className="col-span-1"></div>
+                <div className="border border-border rounded-lg mb-3" style={{ overflowX: "visible", overflowY: "visible" }}>
+                  <div className="grid grid-cols-13 gap-0 bg-background border-b border-border px-3 py-2 text-xs text-muted" style={{ gridTemplateColumns: "3fr 1fr 1fr 2fr 1fr 1fr 1fr 2fr 1fr" }}>
+                    <div>Titel</div>
+                    <div className="text-center">Leistung</div>
+                    <div className="text-center">Typ</div>
+                    <div className="text-center">Menge</div>
+                    <div className="text-right">Preis (€)</div>
+                    <div className="text-center">Rabatt%</div>
+                    <div className="text-center">MwSt%</div>
+                    <div className="text-right">Netto (€)</div>
+                    <div></div>
                   </div>
 
                   {lines.map((l: any, idx: number) => (
                     <div key={idx} className="border-b border-border last:border-0">
-                      <div className="grid grid-cols-12 gap-0 px-3 py-2 items-center">
-                        <div className="col-span-4 pr-2 relative">
+                      <div
+                        className="grid gap-0 px-3 py-2 items-center"
+                        style={{ gridTemplateColumns: "3fr 1fr 1fr 2fr 1fr 1fr 2fr 1fr" }}
+                      >
+                        <div className="pr-2 relative">
                           <div className="flex gap-1">
                             <input
                               value={l.title}
@@ -774,7 +809,19 @@ export default function InvoicesPage() {
                           )}
                         </div>
 
-                        <div className="col-span-1 px-1">
+                        <div className="px-1">
+                          <select
+                            value={l.lineType}
+                            onChange={(e) => updateLine(idx, "lineType", e.target.value)}
+                            className="w-full border border-border rounded px-1 py-1.5 text-xs bg-background"
+                            title="Positionstyp"
+                          >
+                            <option value="OneTime">Einmalig</option>
+                            <option value="RecurringMonthly">Monatlich</option>
+                          </select>
+                        </div>
+
+                        <div className="px-1">
                           <input
                             type="number"
                             step="0.01"
@@ -783,7 +830,7 @@ export default function InvoicesPage() {
                             className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background text-center"
                           />
                         </div>
-                        <div className="col-span-2 px-1">
+                        <div className="px-1">
                           <input
                             type="number"
                             step="0.01"
@@ -792,7 +839,7 @@ export default function InvoicesPage() {
                             className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background text-right"
                           />
                         </div>
-                        <div className="col-span-1 px-1">
+                        <div className="px-1">
                           <input
                             type="number"
                             step="1"
@@ -803,7 +850,7 @@ export default function InvoicesPage() {
                             className="w-full border border-border rounded px-2 py-1.5 text-sm bg-background text-center"
                           />
                         </div>
-                        <div className="col-span-1 px-1">
+                        <div className="px-1">
                           <select
                             value={l.vatPercent}
                             onChange={(e) => updateLine(idx, "vatPercent", +e.target.value)}
@@ -814,14 +861,14 @@ export default function InvoicesPage() {
                             <option value={19}>19%</option>
                           </select>
                         </div>
-                        <div className="col-span-2 px-1 text-right text-sm font-medium">
+                        <div className="px-1 text-right text-sm font-medium">
                           {(() => {
                             const base = l.quantity * l.unitPrice;
                             const disc = base * ((l.discountPercent || 0) / 100);
                             return (base - disc).toFixed(2);
                           })()}
                         </div>
-                        <div className="col-span-1 text-center">
+                        <div className="text-center">
                           <button
                             onClick={() => removeLine(idx)}
                             className="text-danger text-sm hover:opacity-70 px-1"
@@ -866,6 +913,12 @@ export default function InvoicesPage() {
                   </div>
                 </div>
 
+                {lines.some((l: any) => l.lineType === "RecurringMonthly") && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-2 mb-4 text-xs text-purple-700">
+                    Monatliche Positionen erkannt — Abo-Plan & Serienrechnung werden automatisch angelegt.
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => setShow(false)}
@@ -878,7 +931,7 @@ export default function InvoicesPage() {
                     disabled={saving || !form.customerId}
                     className="bg-primary text-white px-5 py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50"
                   >
-                    {saving ? "Speichern..." : "Rechnung erstellen →"}
+                    {saving ? "Wird erstellt..." : "Rechnung erstellen →"}
                   </button>
                 </div>
               </>
