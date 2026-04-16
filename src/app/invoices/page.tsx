@@ -240,11 +240,12 @@ const save = async () => {
       lines: validLines.map((l: any, i: number) => ({
         serviceCatalogItemId: l.serviceCatalogItemId || undefined,
         title: l.title,
-        description: l.description || undefined,
+        description: l.description || '',
         unit: l.unit || undefined,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
         vatPercent: l.vatPercent,
+        discountPercent: l.discountPercent || undefined,
         sortOrder: i,
       })),
     };

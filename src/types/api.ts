@@ -203,6 +203,8 @@ export interface InvoiceLine {
   id?: Id;
   title: string;
   description?: string | null;
+  discountPercent?: number;
+  lineType: number;
   unit?: string | null;
   quantity: number;
   unitPrice: number;
